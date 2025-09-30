@@ -62,7 +62,7 @@ export default function WidgetModal({ onClose }: WidgetModalProps) {
 
           {/* Title in center */}
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Huberman Lab Assistant
+            Feedback
           </h2>
 
           {/* Close button on the right */}

@@ -23,18 +23,20 @@ export function useLayercodeVoice(options: UseSimpleLayercodeVoiceOptions = {}) 
     conversationId: conversationIdRef.current || undefined,
     metadata: options.metadata,
     onConnect: ({ conversationId }) => {
-      console.log('Connected to Layercode agent:', conversationId)
+      console.log('✅ Connected to Layercode agent:', conversationId)
       if (conversationId) {
         conversationIdRef.current = conversationId
         setConversationStarted(true)
       }
     },
     onDisconnect: () => {
-      console.log('Disconnected from Layercode agent')
+      console.log('⚠️ Disconnected from Layercode agent')
       setConversationStarted(false)
     },
     onError: (error) => {
-      console.error('Layercode error:', error)
+      console.error('❌ Layercode error:', error)
+      console.error('Agent ID:', process.env.NEXT_PUBLIC_LAYERCODE_PIPELINE_ID)
+      console.error('Authorize endpoint: /api/layercode/authorize')
     },
     onDataMessage: (data) => {
       // Pass through to parent component if handler provided
