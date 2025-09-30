@@ -4,7 +4,7 @@
 Building a voice-enabled AI assistant widget for the Huberman Lab website that helps visitors find answers to frequently asked questions through natural conversation. The widget appears as a small button on the page that opens a modal with voice interaction capabilities.
 
 ## Supabase Configuration
-**Project ID**: `qkotdvjrsyzdcgwqsqyc`
+**Project ID**: `lrjpiddnxnzabjejqfpd`
 Always use this project_id when interacting with Supabase MCP tools.
 
 ## IMPORTANT: FAQ Data Management
