@@ -27,14 +27,22 @@ export async function GET() {
       .select('*', { count: 'exact', head: true })
       .gte('created_at', today.toISOString())
 
-    // Get match rate from messages
-    const { data: messages } = await supabase
-      .from('conversation_messages')
-      .select('matched')
+    // Get completion rate from sessions
+    const { data: sessions } = await supabase
+      .from('conversation_sessions')
+      .select('total_questions, completed_questions')
 
-    const matchedCount = messages?.filter(m => m.matched).length || 0
-    const totalMessages = messages?.length || 1
-    const matchRate = Math.round((matchedCount / totalMessages) * 100)
+    let totalQuestions = 0
+    let completedQuestions = 0
+
+    sessions?.forEach(s => {
+      totalQuestions += s.total_questions || 0
+      completedQuestions += s.completed_questions || 0
+    })
+
+    const completionRate = totalQuestions > 0
+      ? Math.round((completedQuestions / totalQuestions) * 100)
+      : 0
 
     // Get active sessions (last 5 minutes)
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
@@ -56,33 +64,33 @@ export async function GET() {
       console.error('Error fetching sessions:', sessionsError)
     }
 
-    // Get messages for these sessions
+    // Get feedback responses for these sessions
     const sessionIds = recentSessions?.map(s => s.session_id) || []
-    const { data: allMessages } = await supabase
-      .from('conversation_messages')
+    const { data: allResponses } = await supabase
+      .from('feedback_responses')
       .select('*')
       .in('session_id', sessionIds)
       .order('created_at', { ascending: true })
 
-    // Group messages by session_id
-    const messagesBySession = (allMessages || []).reduce((acc, msg) => {
-      if (!acc[msg.session_id]) {
-        acc[msg.session_id] = []
+    // Group responses by session_id
+    const responsesBySession = (allResponses || []).reduce((acc, resp) => {
+      if (!acc[resp.session_id]) {
+        acc[resp.session_id] = []
       }
-      acc[msg.session_id].push(msg)
+      acc[resp.session_id].push(resp)
       return acc
     }, {} as Record<string, any[]>)
 
-    // Combine sessions with their messages
+    // Combine sessions with their responses
     const formattedSessions = recentSessions?.map(session => ({
       ...session,
-      messages: messagesBySession[session.session_id] || []
+      responses: responsesBySession[session.session_id] || []
     })) || []
 
     return NextResponse.json({
       total: total || 0,
       today: todayCount || 0,
-      matchRate,
+      completionRate,
       activeNow: activeNow || 0,
       recentSessions: formattedSessions
     }, {
@@ -97,7 +105,7 @@ export async function GET() {
     return NextResponse.json({
       total: 0,
       today: 0,
-      matchRate: 0,
+      completionRate: 0,
       activeNow: 0,
       recentSessions: []
     })

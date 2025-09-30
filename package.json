@@ -1,7 +1,8 @@
 {
-  "name": "hubermanchat",
+  "name": "surveybuster",
   "version": "0.1.0",
   "private": true,
+  "description": "AI-powered voice feedback collection widget for gathering customer insights through natural conversation",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

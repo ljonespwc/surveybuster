@@ -5,8 +5,11 @@ export default function Home() {
     <main className="min-h-screen bg-gradient-to-br from-huberman-dark to-huberman-primary flex items-center justify-center">
       <div className="text-center space-y-8">
         <h1 className="text-4xl font-bold text-white mb-12">
-          Huberman Lab Voice Assistant
+          Survey Buster
         </h1>
+        <p className="text-xl text-white/80 max-w-2xl mx-auto mb-6">
+          AI-powered voice feedback collection widget for gathering customer insights through natural conversation
+        </p>
 
         <div className="flex flex-col sm:flex-row gap-6 justify-center">
           <Link
@@ -28,7 +31,7 @@ export default function Home() {
                 />
               </svg>
               <span className="font-semibold text-lg">Widget Demo</span>
-              <span className="text-sm text-white/70">Try the voice assistant</span>
+              <span className="text-sm text-white/70">Try the voice feedback collector</span>
             </div>
           </Link>
 
@@ -51,7 +54,7 @@ export default function Home() {
                 />
               </svg>
               <span className="font-semibold text-lg">Admin Dashboard</span>
-              <span className="text-sm text-white/70">View analytics & get embed code</span>
+              <span className="text-sm text-white/70">View feedback & get embed code</span>
             </div>
           </Link>
         </div>

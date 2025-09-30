@@ -1,288 +1,343 @@
-# Huberman Lab Voice Assistant - Project Status
+# Survey Buster - Project Status
 
 ## Project Overview
-Building a voice-enabled AI assistant widget for the Huberman Lab website that helps visitors find answers to frequently asked questions through natural conversation. The widget appears as a small button on the page that opens a modal with voice interaction capabilities.
+AI-powered voice feedback collection widget for gathering customer insights through natural conversation. The widget appears as a floating button that opens a modal with voice interaction capabilities powered by Layercode's real-time voice AI.
 
 ## Supabase Configuration
 **Project ID**: `lrjpiddnxnzabjejqfpd`
 Always use this project_id when interacting with Supabase MCP tools.
 
-## IMPORTANT: FAQ Data Management
-**DO NOT MODIFY** the `/docs/huberman_lab_faqs.json` file without explicit user request. This file contains carefully curated FAQ content including specific Airtable form URLs that were manually added. Only make changes to this file when specifically instructed by the user, and only modify exactly what is requested.
+## Current Status: ✅ Feedback Collection System Complete
+**Date**: September 30, 2025
 
-## Recent Updates (Sept 25, 2025 - Evening)
+### What's Working
+- **Voice Feedback Flow**: AI proactively asks questions in a structured interview format
+- **Question Progression**: 5-question product feedback flow with conditional follow-ups
+- **Sentiment Analysis**: Real-time analysis of user responses (-1 to 1 scale)
+- **Progress Tracking**: Visual progress bar showing "Question X of Y"
+- **Database Storage**: All responses stored in Supabase with sentiment scores
+- **Admin Dashboard**: View feedback sessions with expandable Q&A transcripts
+- **One-Line Embed**: `<script src="https://surveybuster.vercel.app/widget.js"></script>`
 
-### Streaming Fixes
-- **Fixed "No Match" Tracking**: Declined responses now correctly tracked as `matched: false`
-  - Added `[NO_MATCH]` marker detection in streaming responses
-  - Markers stripped before TTS to keep responses clean
-- **Fixed URL Handling**: AI no longer reads URLs character-by-character
-  - Added explicit prompt instruction to replace URLs with natural phrases
-  - Implemented `[FAQ:NUMBER]` marker to track matched FAQs
-  - URLs extracted from original FAQ answers and displayed in widget
-  - AI says "using the form" while widget shows clickable "Guest Suggestion Form"
-
-## Recent Updates (Sept 25, 2025 - Afternoon)
-
-### Feature Updates
-- **Streaming LLM Responses**: Implemented real-time streaming using Vercel AI SDK
-  - Faster perceived response time - users hear the beginning immediately
-  - More natural conversation flow with gradual response
-  - Better interruption handling during responses
-  - Works with both OpenAI and Gemini providers
-- **AI Provider Switching**: Easy toggle between GPT-4.1-mini and Gemini-2.5-flash-lite
-  - Set `AI_PROVIDER=openai` or `AI_PROVIDER=gemini` in environment
-  - Gemini is 3-4x faster (~800ms vs ~3s response time)
-  - No code changes needed to switch providers
-
-## Recent Updates (Sept 23, 2025)
-
-### Previous Updates
-- **Fixed Database Tracking**: Resolved foreign key constraint issue - sessions must be created before messages
-- **Airtable Form URLs Added**: All form references now have actual clickable Airtable URLs
-- **Clean URL Display**: Airtable forms show as friendly names (e.g., "Guest Suggestion Form") instead of long URLs
-- **Dashboard Caching Fixed**: Added cache-control headers to `/api/stats` for real-time data display
-- **Vercel CLI Deployed**: Manual deployment capability added as backup to GitHub integration
-
-## Recent Updates (Sept 22, 2025)
-
-### Morning Updates
-- **Admin Dashboard**: MVP analytics at `/admin` with embed code
-- **Widget Embed**: Simple one-line script installation
-- **Session-Based Tracking**: Conversations now grouped by user session
-  - New tables: `conversation_sessions` and `conversation_messages`
-  - Dashboard shows expandable/collapsible session groups
-  - Tracks duration, total questions, and match rates per session
-- **Home Page Update**: Removed widget, added links to `/widget` and `/admin`
-- **URL Bug Fix**: Fixed Ph.D and abbreviations showing as URLs
-- **Blue Color Update**: Changed to #00AFEF throughout
-
-### Afternoon Updates
-- **Expanded FAQ Content**: Added 5 new FAQs about "Protocols" book and knowledge base for biographical questions
-  - Total FAQs: 40 (up from 35)
-  - New category: "Protocols Book" with release date, signed copies, languages, etc.
-  - Added `knowledge_base` section for contextual answers about Dr. Huberman
-- **Fixed Dashboard Data Issue**: Resolved Supabase nested select problem
-  - Changed from `conversation_messages(*)` join to separate queries
-  - Sessions and messages fetched independently then combined
-- **Dashboard UX Improvements**:
-  - Removed auto-refresh (was every 30 seconds)
-  - Sessions maintain user's expand/collapse state
-  - Dropped unused `conversations` table from database
-
-### Evening Updates
-- **Conversation History**: Implemented full conversation context tracking
-  - Webhook handler stores messages with turn_id tracking
-  - FAQ matcher now uses conversation history for context-aware responses
-  - Enables follow-up questions like "tell me more" or "what about that?"
-- **Interruption Handling**: Added support for user interruptions
-  - Layercode's interruption_context properly updates partial responses
-  - Maintains conversation coherence when user interrupts mid-answer
-- **Page URL Tracking**: Added visitor source tracking
-  - Stores page_url in database for each session and message
-  - Dashboard displays which page visitors were on when asking questions
-  - Widget.js captures window.location.href automatically
-- **Data Fixes**:
-  - Fixed tracking endpoint to be atomic (prevents count mismatches)
-  - Removed periods after "Dr" in FAQ JSON (prevents false URL detection)
-  - Corrected existing session/message count discrepancies in database
-
-## Current Status: ✅ Production Ready
-- **AI FAQ Matching**: GPT-4.1-mini handles all intent (95%+ accuracy, ~300ms)
-  - Generates natural conversational responses
-  - Polite declines for out-of-scope questions
-- **Voice UX**: Layercode with automatic VAD
-  - Green animations for user speaking
-  - Blue pulse/ring for AI speaking (no bars)
-  - Modal header: WiFi (left), title (center), X (right)
-- **Welcome**: Mentions covered topics (podcast, premium, newsletter, events)
-- **URL Display**: Shows clickable links below voice animation
-  - Full URLs displayed (not abbreviated)
-  - Actual URLs for all FAQ references (scraped from hubermanlab.com/faq)
-  - Links appear during AI response, fade out 3 seconds after
-- **Optimized spacing**: Reduced dead space for better visual balance
-- Build passing, ready for deployment
-
-## Tech Stack
-- **Framework**: Next.js 14 (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **Database**: Supabase (connected for analytics tracking)
-- **Voice**: Layercode (WebSocket + SSE streaming)
-- **AI**: OpenAI GPT-4.1-mini
-- **State Management**: React hooks + Zustand (installed)
-- **Animation**: Framer Motion
+### Tech Stack
+- **Framework**: Next.js 14 (App Router) with TypeScript
+- **Voice**: Layercode WebRTC SDK (real-time STT/TTS streaming)
+- **AI**: OpenAI GPT-4.1-mini & Google Gemini (switchable via `AI_PROVIDER` env var)
+- **Database**: Supabase (PostgreSQL)
+- **Styling**: Tailwind CSS with Framer Motion animations
+- **Deployment**: Vercel
 - **Icons**: Lucide React
-- **Deployment**: Vercel (planned)
 
-## What's Been Built
+## Architecture
 
-### NEW: Admin Dashboard & Widget System
-- **`/admin` Dashboard**: View stats, get embed code, see conversations
-- **`/widget` Embed**: Standalone page for iframe embedding
-- **`widget.js`**: One-line embed script for any website
-- **Supabase Analytics**: Session-based tracking with `conversation_sessions` and `conversation_messages` tables
-- **API Endpoints**: `/api/track` (fast tracking), `/api/stats` (dashboard data)
-
-### 1. Data Layer
-- **FAQ Data**: Scraped from hubermanlab.com/faq
-  - 36 Q&A pairs across 9 categories
-  - Stored in `/docs/huberman_lab_faqs.json`
-  - Categories include: Huberman Lab, Premium, Newsletter, Events, etc.
-
-### 2. Core Components (`/src/components/widget/`)
+### Core Components (`/src/components/widget/`)
 - **VoiceWidget.tsx**: Main widget controller
 - **WidgetButton.tsx**: Floating button to open widget
 - **WidgetModal.tsx**: Modal container with animations
-- **SimplifiedVoiceInterface.tsx**: Clean voice UI with automatic VAD (no manual controls)
+- **SimplifiedVoiceInterface.tsx**: Voice UI with automatic VAD, progress bar
 
-### 3. API Routes (`/src/app/api/`)
-- **`/chat`**: Processes questions, matches FAQs, falls back to OpenAI
-- **`/voice`**: Legacy Web Speech API handler
+### API Routes (`/src/app/api/`)
 - **`/layercode/authorize`**: Secure session authorization for Layercode
-- **`/layercode/webhook`**: SSE webhook handler for voice interactions
+- **`/layercode/webhook`**: SSE webhook handler - core feedback collection logic
+- **`/stats`**: Dashboard analytics data
+- **`/track`**: Fast atomic session/message tracking
+- **`/voice`**: Legacy Web Speech API (unused)
 
-### 4. Business Logic (`/src/lib/`)
-- **faq-ai-matcher.ts**: AI-powered intent matching using GPT-4.1-mini
-- **faq-matcher.ts**: Legacy keyword matching (emergency fallback)
+### Business Logic (`/src/lib/`)
+- **question-flow-manager.ts**: Question flow state machine with follow-up logic
+- **feedback-analyzer.ts**: Sentiment analysis, transition generation, rating extraction
+- **feedback-storage.ts**: Database operations for feedback responses and metrics
+- **ai-provider.ts**: Abstraction layer for OpenAI/Gemini
 - **openai.ts**: GPT-4 integration utilities
-- **supabase.ts**: Database client and types (now connected for analytics)
-- **url-extractor.ts**: Extracts URLs, filters out Ph.D/abbreviations
+- **supabase.ts**: Database client configuration
 
-### 5. Custom Hooks (`/src/hooks/`)
-- **useSimpleLayercodeVoice.ts**: Simplified Layercode integration with automatic VAD
+### Custom Hooks (`/src/hooks/`)
+- **useSimpleLayercodeVoice.ts**: Layercode integration with automatic VAD
 - **useLayercodeVoice.ts**: Full Layercode integration (with transcription display)
-- **useVoice.ts**: Legacy Web Speech API
-- **useChat.ts**: Chat message handling
+- **useVoice.ts**: Legacy Web Speech API (unused)
+
+## Database Schema
+
+### Core Tables
+```sql
+-- Session tracking
+conversation_sessions (
+  session_id TEXT PRIMARY KEY,
+  started_at, ended_at,
+  total_questions INTEGER,
+  completed_questions INTEGER,
+  page_url TEXT
+)
+
+-- Individual feedback responses
+feedback_responses (
+  session_id TEXT,
+  question_id TEXT,
+  question_text TEXT,
+  user_response TEXT,
+  sentiment_score FLOAT  -- -1 to 1
+)
+
+-- Aggregate metrics
+feedback_metrics (
+  session_id TEXT,
+  completion_rate FLOAT,
+  total_duration INTEGER,  -- seconds
+  sentiment_average FLOAT,
+  nps_score INTEGER
+)
+
+-- Question flow definitions
+question_flows (
+  flow_name TEXT,
+  questions JSONB,
+  is_active BOOLEAN
+)
+
+-- Legacy table (minimal usage)
+conversation_messages (
+  session_id TEXT,
+  question TEXT,
+  answered BOOLEAN,
+  category TEXT
+)
+```
 
 ## User Experience Flow
+
 1. User clicks floating widget button
 2. Modal opens with voice interface
-3. User clicks mic once to start conversation
-4. User speaks naturally - Layercode detects when they stop (VAD)
-5. GPT-4.1-mini analyzes intent against all 35 FAQs
-6. If match found: returns FAQ answer directly
-7. If no match: polite decline with invitation to ask another question
-8. Answer is spoken via Layercode TTS
-9. Relevant URLs display below voice animation (if answer contains links)
-10. User can continue conversation naturally (no button clicks needed)
+3. Layercode automatically connects (shows WiFi icon when ready)
+4. AI greets user and asks first question
+5. User responds naturally - Layercode detects when they stop (VAD)
+6. AI analyzes sentiment, generates natural transition
+7. Progress bar updates: "Question X of 5"
+8. AI asks next question
+9. Repeat until all questions answered
+10. Thank you message plays, widget auto-closes after 3 seconds
+11. Admin can view responses in dashboard with sentiment scores
 
-## Quick Start
+## Question Flow System
 
-### Widget Installation
+### Current Active Flow: Product Feedback
+```typescript
+{
+  welcomeMessage: "Hi! I'd love to hear about your experience...",
+  questions: [
+    { id: 'q1', text: 'How long have you been using our product?', type: 'open' },
+    {
+      id: 'q2',
+      text: 'On a scale of 1 to 10, how satisfied are you?',
+      type: 'rating',
+      followUp: { /* triggers if rating < 5 */ }
+    },
+    { id: 'q3', text: 'What feature do you use the most?', type: 'open' },
+    { id: 'q4', text: 'What could we improve?', type: 'open' },
+    { id: 'q5', text: 'Would you recommend us?', type: 'yes_no' }
+  ],
+  thankYouMessage: "Thank you for your feedback!"
+}
+```
+
+Question flows are stored in `/src/lib/question-flow-manager.ts` and can be stored in the `question_flows` Supabase table for dynamic loading.
+
+## Environment Variables
+
+```env
+# Layercode (Voice)
+NEXT_PUBLIC_LAYERCODE_PIPELINE_ID=your_pipeline_id
+LAYERCODE_API_KEY=your_api_key
+LAYERCODE_WEBHOOK_SECRET=your_webhook_secret
+
+# AI Providers (choose one or both)
+OPENAI_API_KEY=your_openai_key
+GEMINI_API_KEY=your_gemini_key
+AI_PROVIDER=openai  # or 'gemini'
+
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_KEY=your_service_key
+
+# App
+NEXT_PUBLIC_APP_URL=https://surveybuster.vercel.app
+USE_STREAMING=true
+```
+
+## Widget Installation
+
 Add this single line to any webpage:
 ```html
-<script src="https://hubermanchat.vercel.app/widget.js"></script>
+<script src="https://surveybuster.vercel.app/widget.js"></script>
 ```
 
-### View Analytics
-Visit `/admin` to see conversation stats and get the embed code.
+The widget will appear as a voice button in the bottom-right corner.
 
-## Next Steps Required
+## Admin Dashboard
 
-### Immediate (Before Testing)
-1. **Environment Setup**:
-   ```bash
-   cp .env.local.example .env.local
-   # Add your OpenAI API key to .env.local
-   ```
-
-2. **Test Development Server**:
-   ```bash
-   npm run dev
-   # Visit http://localhost:3000
-   ```
-
-### Short Term
-1. **GitHub Connection**:
-   ```bash
-   git remote set-url origin https://github.com/[USERNAME]/hubermanchat.git
-   git push -u origin main
-   ```
-
-2. **Supabase Setup** (Optional):
-   - Create Supabase project
-   - Create tables for FAQs and analytics
-   - Add credentials to `.env.local`
-   - Run migration to populate FAQ data
-
-3. **Testing & Refinement**:
-   - Test voice recognition across browsers
-   - Refine FAQ matching algorithm
-   - Improve error handling
-   - Add loading states
-
-### Medium Term
-1. **Layercode Integration**: Replace Web Speech API when available
-2. **Widget Embed Script**: Create standalone script for external sites
-3. **Analytics**: Track usage, popular questions, success rates
-4. **Vercel Deployment**: Deploy and configure production environment
-
-## Project Structure
-```
-hubermanchat/
-├── src/
-│   ├── app/           # Next.js pages and API routes
-│   ├── components/    # React components
-│   ├── lib/          # Utilities and integrations
-│   ├── hooks/        # Custom React hooks
-│   └── types/        # TypeScript definitions
-├── docs/             # FAQ data and documentation
-├── public/           # Static assets
-└── [config files]    # Next, TypeScript, Tailwind configs
-```
+Visit `/admin` to:
+- View total feedback sessions (all time & today)
+- See completion rates
+- Browse recent sessions with expandable Q&A transcripts
+- View sentiment analysis (Positive/Neutral/Negative)
+- Copy embed code
 
 ## Commands
+
 ```bash
 npm run dev      # Start development server
 npm run build    # Build for production
 npm run start    # Start production server
-npm run lint     # Run linter (when configured)
 
-# FAQ Testing
-npx tsx scripts/test-ai-matcher.ts     # Test AI FAQ matching
+# Testing
+npx tsx scripts/test-phase1.ts  # Test question flow and analyzer modules
 ```
 
-## AI FAQ System
+## Key Features
 
-### Architecture
-- **Single API Call**: GPT-4.1-mini matches intent AND generates natural response
-- **No Embeddings**: Pure AI understanding (removed 600KB embedded JSON)
-- **Response Flow**: Match → Natural answer OR Context-aware decline
+### AI-Powered Analysis
+- **Sentiment Analysis**: Every response scored from -1 (very negative) to 1 (very positive)
+- **Natural Transitions**: AI generates contextual phrases like "Great to hear!" or "I understand"
+- **Rating Extraction**: Parses numbers from various formats ("8", "eight", "8 out of 10")
+- **Skip Detection**: Recognizes when users want to skip questions
 
-### Performance
-- ~300ms per query
-- 95%+ accuracy
-- $0.0002 per query
+### Voice UX
+- **Automatic VAD**: No manual controls - just speak naturally
+- **Visual Feedback**:
+  - Green animation when user is speaking
+  - Blue pulse when AI is speaking
+  - WiFi icon shows connection status
+- **Progress Bar**: Animated bar showing "Question X of Y"
+- **Auto-Close**: Widget closes 3 seconds after completion
 
-### Files
-- `docs/huberman_lab_faqs.json` - 35 FAQ pairs
-- `src/lib/faq-ai-matcher.ts` - AI matcher with natural response generation
+### Data & Analytics
+- **Session Tracking**: Groups responses by user session
+- **Completion Metrics**: Tracks which questions were completed
+- **Duration Tracking**: Measures time from start to finish
+- **Page URL Tracking**: Records which page user was on
+- **Export Ready**: Data structured for CSV export (not yet implemented)
+
+## Project Structure
+
+```
+surveybuster/
+├── src/
+│   ├── app/
+│   │   ├── page.tsx              # Homepage
+│   │   ├── widget/page.tsx       # Widget embed page
+│   │   ├── admin/page.tsx        # Admin dashboard
+│   │   └── api/
+│   │       ├── layercode/
+│   │       │   ├── authorize/    # Layercode auth
+│   │       │   └── webhook/      # Main feedback logic
+│   │       ├── stats/            # Dashboard data
+│   │       └── track/            # Fast tracking endpoint
+│   ├── components/
+│   │   ├── admin/                # Dashboard components
+│   │   └── widget/               # Voice widget components
+│   ├── lib/
+│   │   ├── question-flow-manager.ts  # Question flow system
+│   │   ├── feedback-analyzer.ts      # Sentiment & transitions
+│   │   ├── feedback-storage.ts       # Database operations
+│   │   ├── ai-provider.ts            # OpenAI/Gemini abstraction
+│   │   └── supabase.ts               # Supabase client
+│   └── hooks/
+│       └── useSimpleLayercodeVoice.ts  # Main voice hook
+├── public/
+│   └── widget.js                 # One-line embed script
+├── scripts/
+│   └── test-phase1.ts           # Validation tests
+└── docs/
+    ├── BLUEPRINT.md             # Transformation guide
+    └── setup.md                 # Database setup SQL
+```
 
 ## Layercode Integration
 
 ### Architecture
 - **Frontend**: React SDK with WebSocket for real-time audio streaming
-- **Backend**: Node.js SDK with SSE for streaming AI responses
-- **Pipeline**: Browser → Layercode (STT) → Webhook → GPT-4.1-mini → Layercode (TTS) → Browser
+- **Backend**: Node.js SDK with SSE for streaming responses
+- **Pipeline**: Browser → Layercode (STT) → Webhook → AI Analysis → Layercode (TTS) → Browser
 
-### Key Layercode Documentation
-- **React SDK**: https://docs.layercode.com/sdk-reference/react_sdk
-- **Node.js SDK**: https://docs.layercode.com/sdk-reference/node_js_sdk
-- **Webhook SSE API**: https://docs.layercode.com/api-reference/webhook_sse_api
+### Configuration Steps
+1. Create Layercode account at layercode.com
+2. Create new pipeline (Webhook SSE API type)
+3. Set webhook URL: `https://your-domain.com/api/layercode/webhook`
+4. Copy Pipeline ID and API keys to environment variables
 
-### Configuration
-- Agent ID: `NEXT_PUBLIC_LAYERCODE_PIPELINE_ID` (in .env.local)
-- API Key: `LAYERCODE_API_KEY` (in .env.local)
-- Webhook Secret: `LAYERCODE_WEBHOOK_SECRET` (in .env.local)
+### Key Documentation
+- React SDK: https://docs.layercode.com/sdk-reference/react_sdk
+- Node.js SDK: https://docs.layercode.com/sdk-reference/node_js_sdk
+- Webhook SSE API: https://docs.layercode.com/api-reference/webhook_sse_api
+
+## Transformation History
+
+This project was transformed from a Huberman Lab FAQ assistant to a feedback collection widget on September 30, 2025. Key changes:
+
+**Removed:**
+- FAQ matching system
+- URL extraction and display
+- Legacy chat API (`/api/chat`)
+- FAQ data files
+
+**Added:**
+- Question flow state machine
+- Sentiment analysis system
+- Progress tracking UI
+- Feedback-specific database tables
+- Natural transition generation
+
+**Preserved (80% of codebase):**
+- All Layercode voice integration
+- AI provider abstraction layer
+- Widget embed system
+- Admin dashboard structure
+- Supabase integration
+- Component architecture
 
 ## Known Limitations
-- Layercode requires webhook configuration in their dashboard
-- No authentication system (public access only)
+
+- No authentication system (public access)
+- Question flows currently hardcoded (can be moved to Supabase)
+- No A/B testing for question variations
+- No multi-language support
+- No real-time dashboard updates (manual refresh required)
+- CSV export not yet implemented
+
+## Future Enhancements
+
+### High Priority
+- Dynamic question flow loading from Supabase
+- CSV export functionality in admin dashboard
+- Real-time sentiment trends chart
+- Mobile-optimized modal sizing
+
+### Medium Priority
+- A/B testing for question variations
+- Multi-language support
+- Integration webhooks (Slack, CRM)
+- Advanced analytics (word clouds, cohort analysis)
+
+### Low Priority
+- User authentication for admin dashboard
+- Custom branding options for embed
+- Voice tone/speed customization
+- Offline response queuing
 
 ## Resources
-- FAQ Data Source: https://www.hubermanlab.com/faq
-- GitHub Repo: https://github.com/[USERNAME]/hubermanchat
-- OpenAI Docs: https://platform.openai.com/docs
-- Next.js Docs: https://nextjs.org/docs
-- Supabase Docs: https://supabase.com/docs
+
+- **Layercode Docs**: https://docs.layercode.com/
+- **Vercel AI SDK**: https://sdk.vercel.ai/docs
+- **Supabase Docs**: https://supabase.com/docs
+- **Next.js 14 Docs**: https://nextjs.org/docs
+- **OpenAI API**: https://platform.openai.com/docs
+- **Google Gemini**: https://ai.google.dev/docs
+
+## Support & Development
+
+For questions or issues:
+1. Check BLUEPRINT.md for transformation guidance
+2. Review setup.md for database configuration
+3. Test locally with `npm run dev` before deploying
+4. Use Supabase MCP tools for database operations
+5. Check Layercode dashboard for voice connection issues

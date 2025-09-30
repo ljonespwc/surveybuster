@@ -4,31 +4,31 @@ import { useEffect, useState } from 'react'
 import { Copy, Check, MessageCircle, Users, TrendingUp, Activity, ChevronDown, ChevronRight } from 'lucide-react'
 import StatsCard from '@/components/admin/StatsCard'
 
-interface ConversationMessage {
+interface FeedbackResponse {
   id: string
-  question: string
-  matched: boolean
-  category: string | null
+  question_text: string
+  user_response: string
+  sentiment_score: number | null
   created_at: string
 }
 
-interface ConversationSession {
+interface FeedbackSession {
   id: string
   session_id: string
   started_at: string
   ended_at: string | null
   total_questions: number
-  matched_questions: number
+  completed_questions: number
   page_url: string | null
-  messages: ConversationMessage[]
+  responses: FeedbackResponse[]
 }
 
 interface Stats {
   total: number
   today: number
-  matchRate: number
+  completionRate: number
   activeNow: number
-  recentSessions: ConversationSession[]
+  recentSessions: FeedbackSession[]
 }
 
 export default function AdminDashboard() {
@@ -78,14 +78,14 @@ export default function AdminDashboard() {
       <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Huberman Lab Voice Assistant</h1>
-          <p className="text-gray-600 mt-2">Embed code and usage analytics</p>
+          <h1 className="text-3xl font-bold text-gray-900">Survey Buster</h1>
+          <p className="text-gray-600 mt-2">Voice feedback collection widget - Embed code and analytics</p>
         </div>
 
         {/* Embed Code Section */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Install</h2>
-          <p className="text-gray-600 mb-4">Add this single line of code to any page where you want the voice assistant:</p>
+          <p className="text-gray-600 mb-4">Add this single line of code to any page where you want the feedback widget:</p>
 
           <div className="relative">
             <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
@@ -110,28 +110,28 @@ export default function AdminDashboard() {
           </div>
 
           <p className="text-sm text-gray-500 mt-4">
-            The widget will appear as a chat button in the bottom-right corner of the page.
+            The widget will appear as a voice feedback button in the bottom-right corner of the page.
           </p>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatsCard
-            title="Total Conversations"
+            title="Total Sessions"
             value={loading ? '...' : stats?.total || 0}
             subtitle="All time"
             icon={<MessageCircle className="w-5 h-5" />}
           />
           <StatsCard
-            title="Today's Conversations"
+            title="Today's Sessions"
             value={loading ? '...' : stats?.today || 0}
             subtitle="Last 24 hours"
             icon={<TrendingUp className="w-5 h-5" />}
           />
           <StatsCard
-            title="FAQ Match Rate"
-            value={loading ? '...' : `${stats?.matchRate || 0}%`}
-            subtitle="Questions answered"
+            title="Completion Rate"
+            value={loading ? '...' : `${stats?.completionRate || 0}%`}
+            subtitle="Questions completed"
             icon={<Activity className="w-5 h-5" />}
           />
           <StatsCard
@@ -142,15 +142,15 @@ export default function AdminDashboard() {
           />
         </div>
 
-        {/* Recent Conversations */}
+        {/* Recent Feedback Sessions */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-xl font-bold text-gray-900">Recent Conversations</h2>
+            <h2 className="text-xl font-bold text-gray-900">Recent Feedback Sessions</h2>
           </div>
 
           {loading ? (
             <div className="px-6 py-8 text-center text-gray-500">
-              Loading conversations...
+              Loading feedback sessions...
             </div>
           ) : stats?.recentSessions?.length ? (
             <div className="divide-y divide-gray-200">
@@ -189,10 +189,8 @@ export default function AdminDashboard() {
                             })}
                           </div>
                           <div className="text-xs text-gray-500 mt-0.5">
-                            {session.total_questions} question{session.total_questions !== 1 ? 's' : ''}
+                            {session.completed_questions}/{session.total_questions} questions completed
                             {duration > 0 && ` • ${duration}s duration`}
-                            {' • '}
-                            {session.matched_questions}/{session.total_questions} matched
                             {session.page_url && (
                               <>
                                 <br />
@@ -208,54 +206,69 @@ export default function AdminDashboard() {
                       <div>
                         <span
                           className={`inline-flex px-2.5 py-1 text-xs font-semibold rounded-full ${
-                            session.matched_questions > 0
+                            session.completed_questions > 0
                               ? 'bg-green-100 text-green-800'
                               : 'bg-gray-100 text-gray-800'
                           }`}
                         >
                           {session.total_questions > 0
-                            ? `${Math.round((session.matched_questions / session.total_questions) * 100)}% Match`
-                            : 'No Match'}
+                            ? `${Math.round((session.completed_questions / session.total_questions) * 100)}% Complete`
+                            : 'Not Started'}
                         </span>
                       </div>
                     </div>
 
-                    {/* Session Messages (Expandable) */}
-                    {isExpanded && session.messages && session.messages.length > 0 && (
+                    {/* Session Responses (Expandable) */}
+                    {isExpanded && session.responses && session.responses.length > 0 && (
                       <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
                         <div className="space-y-3">
-                          {session.messages.map((message, idx) => (
-                            <div
-                              key={message.id}
-                              className="bg-white rounded-lg px-4 py-3 border border-gray-200"
-                            >
-                              <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                  <p className="text-sm text-gray-900">
-                                    {message.question}
+                          {session.responses.map((response, idx) => {
+                            const sentimentLabel = response.sentiment_score !== null
+                              ? response.sentiment_score > 0.3 ? 'Positive'
+                              : response.sentiment_score < -0.3 ? 'Negative'
+                              : 'Neutral'
+                              : 'N/A'
+
+                            const sentimentColor = response.sentiment_score !== null
+                              ? response.sentiment_score > 0.3 ? 'bg-green-100 text-green-800'
+                              : response.sentiment_score < -0.3 ? 'bg-red-100 text-red-800'
+                              : 'bg-blue-100 text-blue-800'
+                              : 'bg-gray-100 text-gray-800'
+
+                            return (
+                              <div
+                                key={response.id}
+                                className="bg-white rounded-lg px-4 py-3 border border-gray-200"
+                              >
+                                <div className="space-y-2">
+                                  <div className="flex items-start justify-between">
+                                    <p className="text-sm font-medium text-gray-900">
+                                      Q: {response.question_text}
+                                    </p>
+                                    <span
+                                      className={`ml-4 inline-flex px-2 py-1 text-xs font-semibold rounded-full whitespace-nowrap ${sentimentColor}`}
+                                    >
+                                      {sentimentLabel}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-gray-700 pl-4">
+                                    A: {response.user_response}
                                   </p>
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    {new Date(message.created_at).toLocaleTimeString('en-US', {
+                                  <p className="text-xs text-gray-500">
+                                    {new Date(response.created_at).toLocaleTimeString('en-US', {
                                       hour: 'numeric',
                                       minute: '2-digit',
                                       second: '2-digit',
                                       hour12: true
                                     })}
-                                    {message.category && ` • ${message.category}`}
+                                    {response.sentiment_score !== null &&
+                                      ` • Sentiment: ${response.sentiment_score.toFixed(2)}`
+                                    }
                                   </p>
                                 </div>
-                                <span
-                                  className={`ml-4 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                    message.matched
-                                      ? 'bg-green-100 text-green-800'
-                                      : 'bg-gray-100 text-gray-800'
-                                  }`}
-                                >
-                                  {message.matched ? 'Matched' : 'No Match'}
-                                </span>
                               </div>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       </div>
                     )}
@@ -265,7 +278,7 @@ export default function AdminDashboard() {
             </div>
           ) : (
             <div className="px-6 py-8 text-center text-gray-500">
-              No conversations yet. The widget will start tracking when users interact with it.
+              No feedback sessions yet. The widget will start collecting feedback when users interact with it.
             </div>
           )}
         </div>

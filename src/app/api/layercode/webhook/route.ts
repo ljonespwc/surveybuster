@@ -1,19 +1,30 @@
 import { streamResponse } from '@layercode/node-server-sdk'
-import { matchFAQWithAI, type FAQMatch, type NoMatchResponse } from '@/lib/faq-ai-matcher'
-import { streamFAQMatch, extractStreamMetadata } from '@/lib/faq-ai-matcher-streaming'
-import { extractURLsFromAnswer } from '@/lib/url-extractor'
+import {
+  initializeConversation,
+  getConversationState,
+  storeResponse,
+  getNextQuestion,
+  getCurrentQuestion,
+  getProgress,
+  completeConversation,
+  cleanupConversation,
+  type ConversationState
+} from '@/lib/question-flow-manager'
+import {
+  analyzeSentiment,
+  generateTransition,
+  extractRating,
+  detectSkipIntent
+} from '@/lib/feedback-analyzer'
+import {
+  ensureSession,
+  storeFeedbackResponse,
+  updateSessionMetrics,
+  calculateAndStoreMetrics,
+  storeConversationMessage
+} from '@/lib/feedback-storage'
 
 export const dynamic = 'force-dynamic'
-
-// Message type with turn_id tracking
-type MessageWithTurnId = {
-  role: 'system' | 'user' | 'assistant'
-  content: string
-  turn_id?: string
-}
-
-// Store conversation messages in memory (consider Redis for production)
-const conversationMessages: Record<string, MessageWithTurnId[]> = {}
 
 // Webhook request type
 type WebhookRequest = {
@@ -52,30 +63,54 @@ export async function POST(request: Request) {
     return streamResponse(requestBody, async ({ stream }) => {
       try {
         if (type === 'session.start') {
-          // Initialize conversation history with system prompt
-          const systemPrompt = "You are a helpful assistant for the Huberman Lab podcast website. You have access to frequently asked questions about the podcast, Dr. Huberman, his book Protocols, premium membership, newsletter, events, and sponsors. Maintain context from previous messages in the conversation."
+          // Initialize feedback collection conversation
+          try {
+            // Ensure session exists in database
+            await ensureSession(conversationKey, 'widget')
 
-          conversationMessages[conversationKey] = [
-            { role: 'system', content: systemPrompt }
-          ]
+            // Initialize conversation state with question flow
+            const state = await initializeConversation(conversationKey)
 
-          // Send welcome message and store it in history
-          const welcomeMsg = "Hello! I'm your Huberman Lab assistant. How can I help you today?"
-          stream.tts(welcomeMsg)
+            // Get the first question
+            const firstQuestion = getCurrentQuestion(conversationKey)
 
-          conversationMessages[conversationKey].push({
-            role: 'assistant',
-            content: welcomeMsg,
-            turn_id
-          })
+            if (!firstQuestion) {
+              throw new Error('Failed to load question flow')
+            }
+
+            // Send welcome message + first question
+            const welcomeMsg = state.questionFlow.welcomeMessage
+            const fullMessage = `${welcomeMsg} ${firstQuestion.text}`
+
+            stream.tts(fullMessage)
+
+            // Store the first question as a conversation message
+            await storeConversationMessage(conversationKey, firstQuestion.text, firstQuestion.type)
+
+            // Send progress data
+            const progress = getProgress(conversationKey)
+            if (progress) {
+              stream.data({
+                type: 'progress',
+                current: progress.current,
+                total: progress.total
+              })
+            }
+
+            console.log(`✅ Started feedback session ${conversationKey} with ${state.questionFlow.questions.length} questions`)
+          } catch (error) {
+            console.error('Error initializing feedback session:', error)
+            stream.tts("I'm sorry, there was an error starting the feedback session. Please try again.")
+          }
 
           stream.end()
           return
         }
 
         if (type === 'session.end') {
-          // Clean up conversation history after session ends
-          delete conversationMessages[conversationKey]
+          // Clean up conversation state
+          cleanupConversation(conversationKey)
+          console.log(`🧹 Cleaned up feedback session ${conversationKey}`)
           stream.end()
           return
         }
@@ -93,197 +128,122 @@ export async function POST(request: Request) {
         }
 
         if (type === 'message' && text) {
-          // Initialize conversation if not exists (in case session.start was missed)
-          if (!conversationMessages[conversationKey]) {
-            conversationMessages[conversationKey] = [
-              { role: 'system', content: "You are a helpful assistant for the Huberman Lab podcast website." }
-            ]
-          }
+          try {
+            // Get conversation state
+            const state = getConversationState(conversationKey)
 
-          // Handle interruption context (skip for welcome message interruptions)
-          if (interruption_context?.previous_turn_interrupted) {
-            console.log('Handling interruption:', interruption_context)
+            if (!state) {
+              console.error(`No conversation state for ${conversationKey}`)
+              stream.tts("I'm sorry, there was an error. Please try refreshing the page.")
+              stream.end()
+              return
+            }
 
-            // Find and update the interrupted assistant message by turn_id
-            const interruptedMsg = conversationMessages[conversationKey].findLast(
-              m => m.role === 'assistant' && m.turn_id === interruption_context.assistant_turn_id
+            // Check if user wants to skip
+            if (detectSkipIntent(text)) {
+              console.log('User wants to skip question')
+              const nextQ = getNextQuestion(conversationKey)
+
+              if (nextQ) {
+                stream.tts(`No problem. ${nextQ.text}`)
+                await storeConversationMessage(conversationKey, nextQ.text, nextQ.type)
+
+                const progress = getProgress(conversationKey)
+                if (progress) {
+                  stream.data({
+                    type: 'progress',
+                    current: progress.current,
+                    total: progress.total
+                  })
+                }
+              } else {
+                // That was the last question
+                completeConversation(conversationKey)
+                stream.tts(state.questionFlow.thankYouMessage)
+                await updateSessionMetrics(conversationKey, state.responses.length)
+                await calculateAndStoreMetrics(conversationKey, state.responses)
+              }
+
+              stream.end()
+              return
+            }
+
+            // Get current question
+            const currentQuestion = getCurrentQuestion(conversationKey)
+
+            if (!currentQuestion) {
+              console.error('No current question found')
+              stream.tts("Thank you for your feedback!")
+              stream.end()
+              return
+            }
+
+            console.log(`💬 User response to "${currentQuestion.text}": "${text.substring(0, 50)}..."`)
+
+            // Analyze sentiment of the response
+            const sentiment = await analyzeSentiment(text)
+            console.log(`📊 Sentiment: ${sentiment.toFixed(2)}`)
+
+            // Store the response in conversation state
+            storeResponse(conversationKey, currentQuestion.id, currentQuestion.text, text, sentiment)
+
+            // Store in database
+            await storeFeedbackResponse(
+              conversationKey,
+              currentQuestion.id,
+              currentQuestion.text,
+              text,
+              sentiment
             )
 
-            if (interruptedMsg) {
-              // Update with what was actually heard
-              interruptedMsg.content = interruption_context.text_heard || ''
-              console.log(`Updated interrupted message: "${interruption_context.text_heard?.substring(0, 50)}..."`)
-            }
-            // Skip handling if we can't find the message (likely the welcome message)
-          }
+            // Get next question
+            const nextQuestion = getNextQuestion(conversationKey, text, sentiment)
 
-          // Store user message after handling interruption
-          conversationMessages[conversationKey].push({
-            role: 'user',
-            content: text,
-            turn_id
-          })
+            if (nextQuestion) {
+              // Generate a natural transition
+              const transition = await generateTransition(text, sentiment)
+              const fullResponse = `${transition} ${nextQuestion.text}`
 
-          // Debug: Log conversation history
-          console.log(`Conversation ${conversationKey} history:`,
-            conversationMessages[conversationKey].map(m => `${m.role}: ${m.content.substring(0, 50)}...`)
-          )
+              stream.tts(fullResponse)
 
-          // Create placeholder for assistant response
-          const assistantPlaceholderIndex = conversationMessages[conversationKey].length
-          conversationMessages[conversationKey].push({
-            role: 'assistant',
-            content: '',
-            turn_id
-          })
+              // Store the new question
+              await storeConversationMessage(conversationKey, nextQuestion.text, nextQuestion.type)
 
-          // Check if streaming is enabled (can be controlled via env var)
-          const useStreaming = process.env.USE_STREAMING !== 'false' // Default to true
-
-          if (useStreaming) {
-            // STREAMING VERSION - Faster perceived response time
-            console.log('🚀 Using streaming response')
-
-            // Stream the FAQ match response
-            const streamResult = await streamFAQMatch(text, conversationMessages[conversationKey])
-
-            // Get the full response text first to check for markers
-            const fullResponse = await streamResult.text
-
-            // Extract metadata and check for NO_MATCH/FAQ markers
-            const metadata = await extractStreamMetadata(text, fullResponse)
-
-            // Use the clean response (with markers removed) for TTS
-            const responseForTTS = metadata.cleanResponse || fullResponse
-
-            // Send the clean response via TTS
-            stream.tts(responseForTTS)
-
-            // Extract URLs from the original FAQ answer if we have it
-            let urlData: any = { hasLinks: false, links: [] }
-            if (metadata.originalAnswer) {
-              urlData = extractURLsFromAnswer(metadata.originalAnswer)
-            }
-
-            // Track conversation
-            const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://hubermanchat.vercel.app'
-            fetch(`${appUrl}/api/track`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                session_id: session_id || conversation_id || 'unknown',
-                question: text,
-                matched: metadata.matched,
-                category: metadata.category || null,
-                page_url: `${appUrl}/widget`
-              })
-            }).catch(() => {})
-
-            // Update conversation history with the clean response (no markers)
-            conversationMessages[conversationKey][assistantPlaceholderIndex] = {
-              role: 'assistant',
-              content: responseForTTS,
-              turn_id
-            }
-
-            // Send metadata with extracted URLs
-            stream.data({
-              type: metadata.matched ? 'faq_match' : 'no_match',
-              question: text,
-              response: responseForTTS,
-              category: metadata.category,
-              urls: urlData // Now includes actual extracted URLs!
-            })
-
-          } else {
-            // NON-STREAMING VERSION (fallback)
-            console.log('📦 Using non-streaming response')
-
-            // Use AI to match with FAQ, passing conversation history for context
-            const result = await matchFAQWithAI(text, conversationMessages[conversationKey])
-
-            // Track conversation (fire and forget for speed)
-            const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://hubermanchat.vercel.app'
-            fetch(`${appUrl}/api/track`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                session_id: session_id || conversation_id || 'unknown',
-                question: text,
-                matched: result ? !('type' in result && result.type === 'no_match') : false,
-                category: result && 'category' in result ? result.category : null,
-                page_url: `${appUrl}/widget`
-              })
-            }).catch(() => {})
-
-            let finalResponse = ''
-
-            if (result) {
-              if ('type' in result && result.type === 'no_match') {
-                // AI generated a natural decline message
-                finalResponse = result.response
-                stream.tts(finalResponse)
-
-                // Send metadata about no match
+              // Send progress update
+              const progress = getProgress(conversationKey)
+              if (progress) {
                 stream.data({
-                  type: 'no_match',
-                  question: text,
-                  response: finalResponse,
-                  urls: { hasLinks: false, links: [] }
-                })
-              } else {
-                // We have a FAQ match - stream the natural answer
-                const faqMatch = result as FAQMatch
-                finalResponse = faqMatch.naturalAnswer
-
-                // If it's a medium confidence match, add a follow-up
-                if (faqMatch.confidence === 'medium') {
-                  finalResponse += " Was that what you were looking for?"
-                }
-
-                stream.tts(finalResponse)
-
-                // Extract URLs from the original answer
-                const urlData = extractURLsFromAnswer(faqMatch.answer)
-
-                // Send metadata about the FAQ match with URL data
-                stream.data({
-                  type: 'faq_match',
-                  question: faqMatch.question,
-                  answer: finalResponse,
-                  originalAnswer: faqMatch.answer,
-                  confidence: faqMatch.confidence,
-                  category: faqMatch.category,
-                  urls: urlData
+                  type: 'progress',
+                  current: progress.current,
+                  total: progress.total
                 })
               }
+
+              console.log(`➡️  Next question: "${nextQuestion.text}"`)
             } else {
-              // Fallback if something went wrong
-              finalResponse = "I'm sorry, I don't have specific information about that. Is there something else about Huberman Lab I can help you with?"
-              stream.tts(finalResponse)
+              // No more questions - conversation complete!
+              completeConversation(conversationKey)
 
+              stream.tts(state.questionFlow.thankYouMessage)
+
+              // Update session metrics
+              await updateSessionMetrics(conversationKey, state.responses.length)
+
+              // Calculate and store aggregate metrics
+              await calculateAndStoreMetrics(conversationKey, state.responses)
+
+              // Send completion signal
               stream.data({
-                type: 'no_match',
-                question: text,
-                response: finalResponse,
-                urls: { hasLinks: false, links: [] }
+                type: 'complete',
+                totalQuestions: state.responses.length,
+                averageSentiment: sentiment
               })
-            }
 
-            // Update the assistant placeholder with the actual response
-            conversationMessages[conversationKey][assistantPlaceholderIndex] = {
-              role: 'assistant',
-              content: finalResponse,
-              turn_id
+              console.log(`✅ Feedback session ${conversationKey} completed with ${state.responses.length} responses`)
             }
-          }
-
-          // Clean up old conversations to prevent memory leak (keep last 50 active conversations)
-          const conversationKeys = Object.keys(conversationMessages)
-          if (conversationKeys.length > 50) {
-            const oldestKey = conversationKeys[0]
-            delete conversationMessages[oldestKey]
-            console.log(`Cleaned up old conversation: ${oldestKey}`)
+          } catch (error) {
+            console.error('Error processing message:', error)
+            stream.tts("I'm sorry, there was an error processing your response. Could you try again?")
           }
         }
 

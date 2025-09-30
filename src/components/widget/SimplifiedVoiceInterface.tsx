@@ -1,20 +1,24 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Mic, Volume2, Loader2, ExternalLink } from 'lucide-react'
+import { Mic, Volume2, Loader2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLayercodeVoice } from '@/hooks/useSimpleLayercodeVoice'
-import type { ExtractedLink, URLExtractionResult } from '@/lib/url-extractor'
 
 interface SimplifiedVoiceInterfaceProps {
   onClose: () => void
 }
 
+interface ProgressData {
+  current: number
+  total: number
+}
+
 export default function SimplifiedVoiceInterface({ onClose }: SimplifiedVoiceInterfaceProps) {
   const [hasStarted, setHasStarted] = useState(false)
   const [hasHadFirstInteraction, setHasHadFirstInteraction] = useState(false)
-  const [currentURLs, setCurrentURLs] = useState<URLExtractionResult | null>(null)
-  const [showURLs, setShowURLs] = useState(false)
+  const [progress, setProgress] = useState<ProgressData | null>(null)
+  const [isComplete, setIsComplete] = useState(false)
 
   const {
     isConnected,
@@ -25,23 +29,22 @@ export default function SimplifiedVoiceInterface({ onClose }: SimplifiedVoiceInt
     startNewConversation
   } = useLayercodeVoice({
     metadata: {
-      source: 'huberman-lab-widget',
+      source: 'surveybuster-widget',
       timestamp: new Date().toISOString()
     },
     onDataMessage: (data) => {
-      // The data comes wrapped in {type: 'response.data', content: {...}}
-      if (data?.type === 'response.data' && data.content?.urls) {
-        const urlData = data.content.urls
-        if (urlData?.hasLinks) {
-          setCurrentURLs(urlData)
-          setShowURLs(true)
-        }
-      } else if (data?.urls) {
-        // Try direct access in case structure is different
-        if (data.urls.hasLinks) {
-          setCurrentURLs(data.urls)
-          setShowURLs(true)
-        }
+      // Handle progress updates from webhook
+      if (data?.type === 'progress') {
+        setProgress({
+          current: data.current,
+          total: data.total
+        })
+      } else if (data?.type === 'complete') {
+        setIsComplete(true)
+        // Auto-close after completion message
+        setTimeout(() => {
+          onClose()
+        }, 3000)
       }
     }
   })
@@ -75,19 +78,6 @@ export default function SimplifiedVoiceInterface({ onClose }: SimplifiedVoiceInt
     }
   }, [isSpeaking, isListening, hasHadFirstInteraction])
 
-  // Hide URLs when agent stops speaking
-  useEffect(() => {
-    if (!isListening && showURLs) {
-      // Keep URLs visible for a moment after speaking stops
-      const timer = setTimeout(() => {
-        setShowURLs(false)
-      }, 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [isListening, showURLs])
-
-  // Removed debug logging
-
   // Get button color based on state
   const getButtonColor = () => {
     if (!isConnected) return 'bg-gray-400'
@@ -96,19 +86,20 @@ export default function SimplifiedVoiceInterface({ onClose }: SimplifiedVoiceInt
     return 'bg-huberman-secondary hover:bg-huberman-accent'
   }
 
-  // Get status text - only three states, no bouncing
+  // Get status text
   const getStatusText = () => {
     if (!isConnected) return 'Connecting...'
-    if (!hasStarted) return 'Click to start conversation'
+    if (!hasStarted) return 'Click to start'
+    if (isComplete) return 'Thank you for your feedback!'
 
-    // During conversation - only show these two states
+    // During conversation
     if (isSpeaking) return 'Listening to you...'
     if (isListening) return 'Speaking...'
 
-    // Initial state only (before first interaction)
-    if (!hasHadFirstInteraction) return 'Ask me anything'
+    // Initial state
+    if (!hasHadFirstInteraction) return 'Share your thoughts'
 
-    // After interaction has happened, show nothing during silence
+    // After interaction
     return ' '  // Space to maintain layout
   }
 
@@ -182,36 +173,32 @@ export default function SimplifiedVoiceInterface({ onClose }: SimplifiedVoiceInt
           </motion.p>
         </div>
 
-        {/* URL Display Area */}
-        <div className="min-h-[32px] flex items-center justify-center">
+        {/* Progress Display Area */}
+        <div className="min-h-[40px] w-full max-w-xs flex items-center justify-center px-4">
           <AnimatePresence>
-            {showURLs && currentURLs?.hasLinks && (
+            {progress && !isComplete && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 10 }}
                 transition={{ duration: 0.3 }}
-                className="space-y-1 text-center"
+                className="w-full"
               >
-                {currentURLs.links.map((link, index) => (
-                  <div key={index} className="text-xs text-gray-500 dark:text-gray-400 max-w-full px-4">
-                    {link.type === 'url' ? (
-                      <a
-                        href={link.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 hover:text-huberman-secondary transition-colors underline break-all"
-                      >
-                        {link.text}
-                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                      </a>
-                    ) : (
-                      <span className="text-gray-400 italic">
-                        {link.text}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                {/* Progress Bar */}
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-2 overflow-hidden">
+                  <motion.div
+                    className="bg-huberman-secondary h-2 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{
+                      width: `${(progress.current / progress.total) * 100}%`
+                    }}
+                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                  />
+                </div>
+                {/* Progress Text */}
+                <p className="text-xs text-gray-500 text-center">
+                  Question {progress.current} of {progress.total}
+                </p>
               </motion.div>
             )}
           </AnimatePresence>
