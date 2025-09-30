@@ -4,7 +4,7 @@
 
   // Create iframe
   const iframe = document.createElement('iframe');
-  iframe.src = 'https://hubermanchat.vercel.app/widget';
+  iframe.src = 'https://surveybuster.vercel.app/widget';
   iframe.style.cssText = `
     position: fixed;
     bottom: 20px;
@@ -73,7 +73,7 @@
   // Handle messages from iframe
   window.addEventListener('message', (e) => {
     // Only accept messages from our domain
-    if (e.origin !== 'https://hubermanchat.vercel.app') return;
+    if (e.origin !== 'https://surveybuster.vercel.app') return;
 
     if (e.data.type === 'close') {
       isOpen = false;
@@ -83,7 +83,7 @@
 
     if (e.data.type === 'track') {
       // Forward tracking events with session ID and page URL
-      fetch('https://hubermanchat.vercel.app/api/track', {
+      fetch('https://surveybuster.vercel.app/api/track', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
