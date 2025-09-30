@@ -1,4 +1,13 @@
 {
-  "faqs": [],
-  "categories": []
+  "categories": [
+    {
+      "name": "Placeholder",
+      "questions": [
+        {
+          "question": "Placeholder question",
+          "answer": "Placeholder answer - this will be replaced with question flow system"
+        }
+      ]
+    }
+  ]
 }
