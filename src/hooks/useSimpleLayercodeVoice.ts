@@ -17,6 +17,8 @@ export function useLayercodeVoice(options: UseSimpleLayercodeVoiceOptions = {}) 
     status,
     userAudioAmplitude,
     agentAudioAmplitude,
+    connect,
+    disconnect,
   } = useLayercodeAgent({
     agentId: process.env.NEXT_PUBLIC_LAYERCODE_PIPELINE_ID!,
     authorizeSessionEndpoint: '/api/layercode/authorize',
@@ -45,6 +47,14 @@ export function useLayercodeVoice(options: UseSimpleLayercodeVoiceOptions = {}) 
       }
     }
   })
+
+  // Auto-connect on mount
+  useEffect(() => {
+    connect()
+    return () => {
+      disconnect()
+    }
+  }, [])
 
   return {
     // Connection state

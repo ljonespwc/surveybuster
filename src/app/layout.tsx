@@ -5,8 +5,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Huberman Lab Voice Assistant',
-  description: 'AI-powered voice assistant for Huberman Lab FAQ',
+  title: 'Survey Buster',
+  description: 'AI-powered voice feedback collection widget',
 }
 
 export default function RootLayout({
