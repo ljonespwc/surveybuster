@@ -53,14 +53,14 @@ export async function generateTransition(
     const messages: AIMessage[] = [
       {
         role: 'system',
-        content: `You are conducting a voice survey. Create a brief (2-6 word) natural transition that acknowledges the user's response and leads smoothly into the next question. Sound warm and conversational.`
+        content: `You're conducting a voice survey. Create a brief (3-8 word) acknowledgment that directly references what the user just said. Be conversational and specific to their response. Do NOT explain response options or how to answer questions.`
       },
       {
         role: 'user',
-        content: `User said: "${previousResponse}"
-Next question: "${nextQuestionText}"
+        content: `User response: "${previousResponse}"
+Next question text (for context only, don't repeat it): "${nextQuestionText}"
 
-Transition:`
+Acknowledgment:`
       }
     ]
 
