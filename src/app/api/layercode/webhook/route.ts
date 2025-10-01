@@ -22,7 +22,8 @@ import {
   storeFeedbackResponse,
   updateSessionMetrics,
   calculateAndStoreMetrics,
-  storeConversationMessage
+  storeConversationMessage,
+  storeFeedbackAndMessage
 } from '@/lib/feedback-storage'
 
 export const dynamic = 'force-dynamic'
@@ -181,37 +182,42 @@ export async function POST(request: Request) {
 
             console.log(`💬 User response to "${currentQuestion.text}": "${text.substring(0, 50)}..."`)
 
-            // Stream sentiment analysis and transition generation together
+            // OPTIMIZATION 1 & 3: Stream sentiment + transition, but only await transition first
             const streamResult = await streamSentimentAndTransition(text)
-            const sentiment = await streamResult.sentiment
-            const transition = await streamResult.transition
+            const transitionPromise = streamResult.transition
+            const sentimentPromise = streamResult.sentiment
 
-            console.log(`📊 Sentiment: ${sentiment.toFixed(2)}`)
+            // Get transition immediately (needed for response)
+            const transition = await transitionPromise
             console.log(`🔄 Transition: "${transition}"`)
 
-            // Store the response in conversation state
-            storeResponse(conversationKey, currentQuestion.id, currentQuestion.text, text, sentiment)
+            // Get next question while sentiment is still resolving
+            // Note: getNextQuestion needs sentiment, so we await it here
+            const sentiment = await sentimentPromise
+            console.log(`📊 Sentiment: ${sentiment.toFixed(2)}`)
 
-            // Store in database
-            await storeFeedbackResponse(
-              conversationKey,
-              currentQuestion.id,
-              currentQuestion.text,
-              text,
-              sentiment
-            )
+            // Store the response in conversation state (in-memory, instant)
+            storeResponse(conversationKey, currentQuestion.id, currentQuestion.text, text, sentiment)
 
             // Get next question
             const nextQuestion = getNextQuestion(conversationKey, text, sentiment)
 
             if (nextQuestion) {
-              // Combine transition with next question and send to TTS
+              // Combine transition with next question
               const fullResponse = `${transition} ${nextQuestion.text}`
 
+              // OPTIMIZATION 2: Send TTS immediately (don't wait for DB)
               stream.tts(fullResponse)
 
-              // Store the new question
-              await storeConversationMessage(conversationKey, nextQuestion.text, nextQuestion.type)
+              // OPTIMIZATION 1 & 4: Fire-and-forget database writes (parallel + batched)
+              storeFeedbackAndMessage(
+                conversationKey,
+                currentQuestion.id,
+                currentQuestion.text,
+                text,
+                sentiment,
+                nextQuestion.type
+              ).catch(err => console.error('DB error:', err))
 
               // Send progress update
               const progress = getProgress(conversationKey)

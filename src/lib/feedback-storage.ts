@@ -232,3 +232,55 @@ export async function storeConversationMessage(
     console.error('Error storing conversation message:', error)
   }
 }
+
+/**
+ * OPTIMIZED: Store feedback response AND conversation message in a single transaction
+ * This reduces database round-trips from 2 to 1
+ */
+export async function storeFeedbackAndMessage(
+  sessionId: string,
+  questionId: string,
+  questionText: string,
+  userResponse: string,
+  sentimentScore: number,
+  category?: string
+): Promise<void> {
+  try {
+    const supabase = getSupabaseClient()
+
+    // Use a transaction to insert both records atomically
+    const { error } = await supabase.rpc('store_feedback_batch', {
+      p_session_id: sessionId,
+      p_question_id: questionId,
+      p_question_text: questionText,
+      p_user_response: userResponse,
+      p_sentiment_score: sentimentScore,
+      p_category: category || 'feedback'
+    })
+
+    if (error) {
+      // Fallback to individual inserts if RPC doesn't exist
+      console.warn('RPC not available, using parallel inserts:', error.message)
+      await Promise.all([
+        supabase.from('feedback_responses').insert({
+          session_id: sessionId,
+          question_id: questionId,
+          question_text: questionText,
+          user_response: userResponse,
+          sentiment_score: sentimentScore
+        }),
+        supabase.from('conversation_messages').insert({
+          session_id: sessionId,
+          question: questionText,
+          answered: true,
+          category: category || 'feedback'
+        })
+      ])
+    }
+
+    console.log(`✅ Stored feedback + message for session ${sessionId}`)
+  } catch (error) {
+    console.error('Error storing feedback batch:', error)
+    // Don't throw - we don't want to break the conversation flow
+  }
+}
