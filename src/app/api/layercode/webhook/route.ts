@@ -182,32 +182,17 @@ export async function POST(request: Request) {
 
             console.log(`💬 User response to "${currentQuestion.text}": "${text.substring(0, 50)}..."`)
 
-            // OPTIMIZATION 1 & 3: Stream sentiment + transition in parallel
-            let transition = "Thanks for sharing"
-            let sentiment = 0
+            // Stream sentiment analysis and transition generation
+            const streamResult = await streamSentimentAndTransition(text)
 
-            try {
-              const streamResult = await Promise.race([
-                streamSentimentAndTransition(text),
-                new Promise((_, reject) =>
-                  setTimeout(() => reject(new Error('AI timeout after 5s')), 5000)
-                )
-              ]) as Awaited<ReturnType<typeof streamSentimentAndTransition>>
+            // Get both values in parallel
+            const [transition, sentiment] = await Promise.all([
+              streamResult.transition,
+              streamResult.sentiment
+            ])
 
-              // Get both values in parallel (don't wait for one before the other)
-              ;[transition, sentiment] = await Promise.race([
-                Promise.all([streamResult.transition, streamResult.sentiment]),
-                new Promise<[string, number]>((_, reject) =>
-                  setTimeout(() => reject(new Error('Parse timeout after 3s')), 3000)
-                )
-              ])
-
-              console.log(`🔄 Transition: "${transition}"`)
-              console.log(`📊 Sentiment: ${sentiment.toFixed(2)}`)
-            } catch (streamError) {
-              console.error('❌ Streaming AI error (using fallback):', streamError)
-              // Keep fallback values already set above
-            }
+            console.log(`🔄 Transition: "${transition}"`)
+            console.log(`📊 Sentiment: ${sentiment.toFixed(2)}`)
 
             // Store the response in conversation state (in-memory, instant)
             storeResponse(conversationKey, currentQuestion.id, currentQuestion.text, text, sentiment)
