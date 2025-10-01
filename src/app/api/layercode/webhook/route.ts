@@ -131,14 +131,12 @@ export async function POST(request: Request) {
 
         if (type === 'message' && text) {
           try {
-            // Get conversation state
-            const state = getConversationState(conversationKey)
+            // Get or initialize conversation state (handles serverless cold starts)
+            let state = getConversationState(conversationKey)
 
             if (!state) {
-              console.error(`No conversation state for ${conversationKey}`)
-              stream.tts("I'm sorry, there was an error. Please try refreshing the page.")
-              stream.end()
-              return
+              console.log(`⚠️  No state found for ${conversationKey}, reinitializing...`)
+              state = await initializeConversation(conversationKey)
             }
 
             // Check if user wants to skip
