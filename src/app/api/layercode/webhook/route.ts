@@ -11,11 +11,12 @@ import {
   type ConversationState
 } from '@/lib/question-flow-manager'
 import {
-  analyzeSentiment,
-  generateTransition,
   extractRating,
   detectSkipIntent
 } from '@/lib/feedback-analyzer'
+import {
+  streamSentimentAndTransition
+} from '@/lib/feedback-analyzer-streaming'
 import {
   ensureSession,
   storeFeedbackResponse,
@@ -180,9 +181,13 @@ export async function POST(request: Request) {
 
             console.log(`💬 User response to "${currentQuestion.text}": "${text.substring(0, 50)}..."`)
 
-            // Analyze sentiment of the response
-            const sentiment = await analyzeSentiment(text)
+            // Stream sentiment analysis and transition generation together
+            const streamResult = await streamSentimentAndTransition(text)
+            const sentiment = await streamResult.sentiment
+            const transition = await streamResult.transition
+
             console.log(`📊 Sentiment: ${sentiment.toFixed(2)}`)
+            console.log(`🔄 Transition: "${transition}"`)
 
             // Store the response in conversation state
             storeResponse(conversationKey, currentQuestion.id, currentQuestion.text, text, sentiment)
@@ -200,8 +205,7 @@ export async function POST(request: Request) {
             const nextQuestion = getNextQuestion(conversationKey, text, sentiment)
 
             if (nextQuestion) {
-              // Generate a natural transition
-              const transition = await generateTransition(text, sentiment)
+              // Combine transition with next question and send to TTS
               const fullResponse = `${transition} ${nextQuestion.text}`
 
               stream.tts(fullResponse)
