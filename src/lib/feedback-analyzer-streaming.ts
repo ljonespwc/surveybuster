@@ -120,6 +120,8 @@ TRANSITION: That's great!`
 
   // Create promises that share the same resolved text
   const parsedData = fullTextPromise.then(text => {
+    console.log('📝 AI Response:', text)
+
     const sentimentMatch = text.match(/SENTIMENT:\s*(-?\d+\.?\d*)/)
     const transitionMatch = text.match(/TRANSITION:\s*(.+)/)
 
@@ -133,12 +135,17 @@ TRANSITION: That's great!`
 
     // Fallback transition based on sentiment
     if (!transition) {
+      console.warn('⚠️  No transition found in AI response, using fallback')
       if (sentiment > 0.3) transition = "That's great!"
       else if (sentiment < -0.3) transition = "I understand."
       else transition = "Thanks for sharing."
     }
 
+    console.log('✅ Parsed:', { sentiment, transition })
     return { sentiment, transition }
+  }).catch(err => {
+    console.error('❌ Parse error:', err)
+    return { sentiment: 0, transition: "Thanks for sharing" }
   })
 
   return {
