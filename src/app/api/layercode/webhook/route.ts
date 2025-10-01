@@ -13,7 +13,8 @@ import {
 import {
   extractRating,
   detectSkipIntent,
-  analyzeSentiment
+  analyzeSentiment,
+  generateTransition
 } from '@/lib/feedback-analyzer'
 import {
   ensureSession,
@@ -188,8 +189,15 @@ export async function POST(request: Request) {
             const nextQuestion = getNextQuestion(conversationKey, text)
 
             if (nextQuestion) {
-              // Just ask the next question directly
-              stream.tts(nextQuestion.text)
+              // Generate natural transition based on response and next question
+              const transition = await generateTransition(text, nextQuestion.text)
+
+              // Send transition + next question
+              stream.tts(`${transition} ${nextQuestion.text}`)
+
+              // Get sequence number and progress
+              const currentProgress = getProgress(conversationKey)
+              const sequenceNum = currentProgress ? currentProgress.current : 1
 
               // Fire-and-forget: Store response + store next question
               Promise.all([
@@ -199,7 +207,8 @@ export async function POST(request: Request) {
                   currentQuestion.id,
                   currentQuestion.text,
                   text,
-                  undefined // sentiment will be added async
+                  undefined, // sentiment will be added async
+                  sequenceNum
                 ),
                 // Store the next question we're about to ask
                 storeConversationMessage(conversationKey, nextQuestion.text, nextQuestion.type)
@@ -215,12 +224,11 @@ export async function POST(request: Request) {
               }).catch(err => console.error('❌ Sentiment analysis error:', err))
 
               // Send progress update
-              const progress = getProgress(conversationKey)
-              if (progress) {
+              if (currentProgress) {
                 stream.data({
                   type: 'progress',
-                  current: progress.current,
-                  total: progress.total
+                  current: currentProgress.current,
+                  total: currentProgress.total
                 })
               }
 
@@ -231,13 +239,18 @@ export async function POST(request: Request) {
 
               stream.tts(state.questionFlow.thankYouMessage)
 
+              // Get sequence number for final response
+              const finalProgress = getProgress(conversationKey)
+              const finalSeqNum = finalProgress ? finalProgress.current : 1
+
               // Store the final response (fire-and-forget)
               storeFeedbackResponse(
                 conversationKey,
                 currentQuestion.id,
                 currentQuestion.text,
                 text,
-                undefined
+                undefined,
+                finalSeqNum
               ).catch(err => console.error('❌ Final response DB error:', err))
 
               // Async sentiment for final response

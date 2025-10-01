@@ -178,8 +178,7 @@ export function storeResponse(
  */
 export function getNextQuestion(
   sessionId: string,
-  previousResponse?: string,
-  sentiment?: number
+  previousResponse?: string
 ): Question | null {
   const state = conversationStates[sessionId]
   if (!state) {
@@ -199,7 +198,7 @@ export function getNextQuestion(
   if (currentQuestion?.followUp && previousResponse) {
     const shouldFollow = shouldTriggerFollowUp(
       previousResponse,
-      sentiment,
+      undefined,
       currentQuestion.followUp.condition
     )
 

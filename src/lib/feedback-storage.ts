@@ -21,7 +21,8 @@ export async function storeFeedbackResponse(
   questionId: string,
   questionText: string,
   userResponse: string,
-  sentimentScore?: number
+  sentimentScore?: number,
+  sequenceNumber?: number
 ): Promise<void> {
   try {
     const supabase = getSupabaseClient()
@@ -33,7 +34,8 @@ export async function storeFeedbackResponse(
         question_id: questionId,
         question_text: questionText,
         user_response: userResponse,
-        sentiment_score: sentimentScore
+        sentiment_score: sentimentScore,
+        sequence_number: sequenceNumber
       })
 
     if (error) {

@@ -38,8 +38,8 @@ async function runTests() {
 
   // Store response and get next
   if (firstQ) {
-    storeResponse(testSessionId, firstQ.id, firstQ.text, 'About 6 months', 0.2)
-    const secondQ = getNextQuestion(testSessionId, 'About 6 months', 0.2)
+    storeResponse(testSessionId, firstQ.id, firstQ.text, 'About 6 months')
+    const secondQ = getNextQuestion(testSessionId, 'About 6 months')
     console.log(`✅ Next question: "${secondQ?.text}"`)
   }
 
@@ -108,7 +108,7 @@ if (hasOpenAI || hasGemini) {
     console.log(`✅ Sentiment: ${sentiment.toFixed(2)} (expected positive ~0.7+)`)
 
     console.log('Testing transition generation...')
-    const transition = await generateTransition('I absolutely love this product!', 0.8)
+    const transition = await generateTransition('I absolutely love this product!', 'What feature do you use most?')
     console.log(`✅ Transition: "${transition}"`)
 
   } catch (error) {

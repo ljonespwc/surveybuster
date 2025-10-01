@@ -70,6 +70,7 @@ export async function GET() {
       .from('feedback_responses')
       .select('*')
       .in('session_id', sessionIds)
+      .order('sequence_number', { ascending: true })
       .order('created_at', { ascending: true })
 
     // Group responses by session_id

@@ -40,12 +40,12 @@ export async function analyzeSentiment(text: string): Promise<number> {
 }
 
 /**
- * Generate a natural transition between questions based on sentiment
- * Creates contextual phrases like "Great!", "I understand", "Thanks for sharing"
+ * Generate a natural transition between questions
+ * Creates contextual phrases based on user response and next question
  */
 export async function generateTransition(
   previousResponse: string,
-  sentiment: number
+  nextQuestionText: string
 ): Promise<string> {
   try {
     const aiProvider = getAIProvider()
@@ -53,39 +53,25 @@ export async function generateTransition(
     const messages: AIMessage[] = [
       {
         role: 'system',
-        content: `You are creating short transition phrases between survey questions.
-Generate ONE very brief (2-4 words) natural transition that:
-- Acknowledges what the user just said
-- Feels conversational and warm
-- Matches the sentiment of their response
-- Doesn't repeat their words back
-
-Examples:
-- "Great to hear!"
-- "I understand."
-- "Thanks for sharing."
-- "Got it."
-- "That's helpful."
-
-Return ONLY the transition phrase, nothing else.`
+        content: `You are conducting a voice survey. Create a brief (2-6 word) natural transition that acknowledges the user's response and leads smoothly into the next question. Sound warm and conversational.`
       },
       {
         role: 'user',
-        content: `User's response (sentiment: ${sentiment.toFixed(2)}): "${previousResponse}"\n\nGenerate transition phrase:`
+        content: `User said: "${previousResponse}"
+Next question: "${nextQuestionText}"
+
+Transition:`
       }
     ]
 
     const response = await aiProvider.generateCompletion(messages, {
       temperature: 0.7,
-      maxTokens: 15
+      maxTokens: 20
     })
 
-    return response.trim().replace(/["']/g, '') // Remove quotes if AI added them
+    return response.trim().replace(/["']/g, '')
   } catch (error) {
     console.error('Failed to generate transition:', error)
-    // Fallback transitions based on sentiment
-    if (sentiment > 0.3) return "That's great!"
-    if (sentiment < -0.3) return "I understand."
     return "Thanks for sharing."
   }
 }
