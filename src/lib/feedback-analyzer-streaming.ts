@@ -115,35 +115,36 @@ TRANSITION: That's great!`
     temperature: 0.5
   })
 
-  // Parse the streamed result
-  const fullText = result.text
+  // Parse the streamed result - await it once and parse from the resolved text
+  const fullTextPromise = result.text
 
-  const sentiment = fullText.then(text => {
-    const match = text.match(/SENTIMENT:\s*(-?\d+\.?\d*)/)
-    if (match) {
-      const value = parseFloat(match[1])
-      return Math.max(-1, Math.min(1, value))
-    }
-    return 0 // Neutral fallback
-  })
+  // Create promises that share the same resolved text
+  const parsedData = fullTextPromise.then(text => {
+    const sentimentMatch = text.match(/SENTIMENT:\s*(-?\d+\.?\d*)/)
+    const transitionMatch = text.match(/TRANSITION:\s*(.+)/)
 
-  const transition = fullText.then(text => {
-    const match = text.match(/TRANSITION:\s*(.+)/)
-    if (match) {
-      return match[1].trim().replace(/['"]/g, '')
+    const sentiment = sentimentMatch
+      ? Math.max(-1, Math.min(1, parseFloat(sentimentMatch[1])))
+      : 0
+
+    let transition = transitionMatch
+      ? transitionMatch[1].trim().replace(/['"]/g, '')
+      : null
+
+    // Fallback transition based on sentiment
+    if (!transition) {
+      if (sentiment > 0.3) transition = "That's great!"
+      else if (sentiment < -0.3) transition = "I understand."
+      else transition = "Thanks for sharing."
     }
-    // Fallback based on sentiment
-    return sentiment.then(s => {
-      if (s > 0.3) return "That's great!"
-      if (s < -0.3) return "I understand."
-      return "Thanks for sharing."
-    })
+
+    return { sentiment, transition }
   })
 
   return {
     textStream: result.textStream,
-    sentiment,
-    transition
+    sentiment: parsedData.then(d => d.sentiment),
+    transition: parsedData.then(d => d.transition)
   }
 }
 
