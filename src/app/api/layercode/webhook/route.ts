@@ -13,9 +13,9 @@ import {
 import {
   extractRating,
   detectSkipIntent,
-  analyzeSentiment,
-  generateTransition
+  analyzeSentiment
 } from '@/lib/feedback-analyzer'
+import { getAIProvider } from '@/lib/ai-provider'
 import {
   ensureSession,
   storeFeedbackResponse,
@@ -73,35 +73,37 @@ export async function POST(request: Request) {
             // Ensure session exists in database with total question count
             await ensureSession(conversationKey, 'widget', state.questionFlow.questions.length)
 
-            // Get the first question
+            // Get first question
             const firstQuestion = getCurrentQuestion(conversationKey)
-
             if (!firstQuestion) {
-              throw new Error('Failed to load question flow')
+              throw new Error('No questions in flow')
             }
 
-            // Send welcome message + first question
-            const welcomeMsg = state.questionFlow.welcomeMessage
-            const fullMessage = `${welcomeMsg} ${firstQuestion.text}`
+            // Generate natural greeting + first question using LLM
+            const aiProvider = getAIProvider()
+            const greeting = await aiProvider.generateCompletion([
+              {
+                role: 'system',
+                content: `You're conducting a brief voice survey. Greet the user warmly, mention it'll take about 2 minutes, then ask the first question naturally. Be conversational.`
+              },
+              {
+                role: 'user',
+                content: `First question: ${firstQuestion.text}`
+              }
+            ], { temperature: 0.7, maxTokens: 100 })
 
-            stream.tts(fullMessage)
+            stream.tts(greeting.trim())
 
-            // Store the first question as a conversation message
-            await storeConversationMessage(conversationKey, firstQuestion.text, firstQuestion.type)
+            // Send progress
+            stream.data({
+              type: 'progress',
+              current: 1,
+              total: state.questionFlow.questions.length
+            })
 
-            // Send progress data
-            const progress = getProgress(conversationKey)
-            if (progress) {
-              stream.data({
-                type: 'progress',
-                current: progress.current,
-                total: progress.total
-              })
-            }
-
-            console.log(`✅ Started feedback session ${conversationKey} with ${state.questionFlow.questions.length} questions`)
+            console.log(`✅ Started session ${conversationKey}`)
           } catch (error) {
-            console.error('Error initializing feedback session:', error)
+            console.error('Error initializing session:', error)
             stream.tts("I'm sorry, there was an error starting the feedback session. Please try again.")
           }
 
@@ -131,150 +133,94 @@ export async function POST(request: Request) {
 
         if (type === 'message' && text) {
           try {
-            // Get or initialize conversation state (handles serverless cold starts)
             let state = getConversationState(conversationKey)
-
             if (!state) {
-              console.log(`⚠️  No state found for ${conversationKey}, reinitializing...`)
               state = await initializeConversation(conversationKey)
-              // Update total_questions in database
               await ensureSession(conversationKey, undefined, state.questionFlow.questions.length)
             }
 
-            // Check if user wants to skip
-            if (detectSkipIntent(text)) {
-              console.log('User wants to skip question')
-              const nextQ = getNextQuestion(conversationKey)
-
-              if (nextQ) {
-                stream.tts(`No problem. ${nextQ.text}`)
-                await storeConversationMessage(conversationKey, nextQ.text, nextQ.type)
-
-                const progress = getProgress(conversationKey)
-                if (progress) {
-                  stream.data({
-                    type: 'progress',
-                    current: progress.current,
-                    total: progress.total
-                  })
-                }
-              } else {
-                // That was the last question
-                completeConversation(conversationKey)
-                stream.tts(state.questionFlow.thankYouMessage)
-                await updateSessionMetrics(conversationKey, state.responses.length)
-                await calculateAndStoreMetrics(conversationKey, state.responses)
-              }
-
-              stream.end()
-              return
-            }
-
-            // Get current question
             const currentQuestion = getCurrentQuestion(conversationKey)
-
             if (!currentQuestion) {
-              console.error('No current question found')
-              stream.tts("Thank you for your feedback!")
+              stream.tts("Thank you so much for your feedback!")
               stream.end()
               return
             }
 
-            console.log(`💬 User response to "${currentQuestion.text}": "${text.substring(0, 50)}..."`)
+            console.log(`💬 Response to "${currentQuestion.text}": "${text.substring(0, 50)}..."`)
 
-            // Store the response in conversation state (in-memory, instant) - no sentiment yet
+            // Store response in memory
             storeResponse(conversationKey, currentQuestion.id, currentQuestion.text, text)
 
-            // Get next question (no sentiment needed for follow-up logic anymore)
+            // Get next question
             const nextQuestion = getNextQuestion(conversationKey, text)
 
             if (nextQuestion) {
-              // Generate natural transition based on response and next question
-              const transition = await generateTransition(text, nextQuestion.text)
+              // Generate natural transition using LLM
+              const aiProvider = getAIProvider()
+              const response = await aiProvider.generateCompletion([
+                {
+                  role: 'system',
+                  content: `You're conducting a voice survey. The user just answered. Acknowledge their response naturally (reference what they said), then ask the next question conversationally. Be brief and warm.`
+                },
+                {
+                  role: 'user',
+                  content: `User's response: "${text}"
+Next question: ${nextQuestion.text}
 
-              // Send transition + next question
-              stream.tts(`${transition} ${nextQuestion.text}`)
+Your response:`
+                }
+              ], { temperature: 0.7, maxTokens: 100 })
 
-              // Get sequence number and progress
-              const currentProgress = getProgress(conversationKey)
-              const sequenceNum = currentProgress ? currentProgress.current : 1
+              stream.tts(response.trim())
 
-              // Fire-and-forget: Store response + store next question
-              Promise.all([
-                // Store the user's response (without sentiment for now)
-                storeFeedbackResponse(
-                  conversationKey,
-                  currentQuestion.id,
-                  currentQuestion.text,
-                  text,
-                  undefined, // sentiment will be added async
-                  sequenceNum
-                ),
-                // Store the next question we're about to ask
-                storeConversationMessage(conversationKey, nextQuestion.text, nextQuestion.type)
-              ]).catch(err => {
-                console.error('❌ DB write error:', err)
-                console.error('Session:', conversationKey)
-                console.error('Question:', currentQuestion.id)
-              })
-
-              // Async sentiment analysis - updates DB when complete (separate promise)
-              analyzeSentiment(text).then(sentiment => {
-                return updateSentimentScore(conversationKey, currentQuestion.id, sentiment)
-              }).catch(err => console.error('❌ Sentiment analysis error:', err))
-
-              // Send progress update
-              if (currentProgress) {
-                stream.data({
-                  type: 'progress',
-                  current: currentProgress.current,
-                  total: currentProgress.total
-                })
+              // Progress + storage (fire-and-forget)
+              const prog = getProgress(conversationKey)
+              if (prog) {
+                stream.data({ type: 'progress', current: prog.current, total: prog.total })
               }
 
-              console.log(`➡️  Next question: "${nextQuestion.text}"`)
+              const seqNum = prog ? prog.current - 1 : 1
+              storeFeedbackResponse(conversationKey, currentQuestion.id, currentQuestion.text, text, undefined, seqNum)
+                .catch(err => console.error('Storage error:', err))
+              analyzeSentiment(text)
+                .then(s => updateSentimentScore(conversationKey, currentQuestion.id, s))
+                .catch(err => console.error('Sentiment error:', err))
+
             } else {
-              // No more questions - conversation complete!
+              // Final question - thank them
+              const aiProvider = getAIProvider()
+              const thanks = await aiProvider.generateCompletion([
+                {
+                  role: 'system',
+                  content: `The user just completed a voice survey. Thank them warmly for their time and feedback. Be brief.`
+                },
+                {
+                  role: 'user',
+                  content: `Their final response: "${text}"`
+                }
+              ], { temperature: 0.7, maxTokens: 80 })
+
+              stream.tts(thanks.trim())
+
+              // Cleanup
               completeConversation(conversationKey)
+              const prog = getProgress(conversationKey)
+              const seqNum = prog ? prog.current : state.responses.length
 
-              stream.tts(state.questionFlow.thankYouMessage)
+              storeFeedbackResponse(conversationKey, currentQuestion.id, currentQuestion.text, text, undefined, seqNum)
+                .catch(err => console.error('Storage error:', err))
+              analyzeSentiment(text)
+                .then(s => updateSentimentScore(conversationKey, currentQuestion.id, s))
+                .catch(err => console.error('Sentiment error:', err))
 
-              // Get sequence number for final response
-              const finalProgress = getProgress(conversationKey)
-              const finalSeqNum = finalProgress ? finalProgress.current : 1
-
-              // Store the final response (fire-and-forget)
-              storeFeedbackResponse(
-                conversationKey,
-                currentQuestion.id,
-                currentQuestion.text,
-                text,
-                undefined,
-                finalSeqNum
-              ).catch(err => console.error('❌ Final response DB error:', err))
-
-              // Async sentiment for final response
-              analyzeSentiment(text).then(sentiment => {
-                return updateSentimentScore(conversationKey, currentQuestion.id, sentiment)
-              }).catch(err => console.error('❌ Final sentiment error:', err))
-
-              // Update session metrics
               await updateSessionMetrics(conversationKey, state.responses.length)
-
-              // Calculate and store aggregate metrics
               await calculateAndStoreMetrics(conversationKey, state.responses)
 
-              // Send completion signal
-              stream.data({
-                type: 'complete',
-                totalQuestions: state.responses.length
-              })
-
-              console.log(`✅ Feedback session ${conversationKey} completed with ${state.responses.length} responses`)
+              stream.data({ type: 'complete', totalQuestions: state.responses.length })
             }
           } catch (error) {
             console.error('Error processing message:', error)
-            stream.tts("I'm sorry, there was an error processing your response. Could you try again?")
+            stream.tts("I'm sorry, there was an error. Could you try again?")
           }
         }
 

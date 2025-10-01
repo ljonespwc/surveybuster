@@ -156,24 +156,19 @@ Return ONLY the category name, nothing else.`
  * Detect if response indicates user wants to skip or end early
  */
 export function detectSkipIntent(text: string): boolean {
-  const lowerText = text.toLowerCase()
+  const lowerText = text.toLowerCase().trim()
+
+  // Only match these as standalone words/phrases
   const skipPhrases = [
     'skip',
     'pass',
     'next question',
     'move on',
-    'don\'t know',
-    'not sure',
     'rather not say',
-    'prefer not to answer',
-    'end',
-    'stop',
-    'quit',
-    'done',
-    'finish'
+    'prefer not to answer'
   ]
 
-  return skipPhrases.some(phrase => lowerText.includes(phrase))
+  return skipPhrases.some(phrase => lowerText === phrase || lowerText.startsWith(phrase + ' ') || lowerText.endsWith(' ' + phrase))
 }
 
 /**
