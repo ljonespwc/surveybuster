@@ -11,7 +11,19 @@ export async function analyzeSentiment(text: string): Promise<number> {
     const messages: AIMessage[] = [
       {
         role: 'system',
-        content: 'Analyze the sentiment of the user response. Return ONLY a number between -1 (very negative) and 1 (very positive). No explanation, just the number.'
+        content: `Analyze sentiment of this survey response. Return a number from -1 to 1:
+-1 to -0.3 = Negative (complaints, dissatisfaction, problems)
+-0.3 to 0.3 = Neutral (factual, indifferent, mixed)
+0.3 to 1 = Positive (satisfaction, praise, high ratings, enthusiasm)
+
+Consider:
+- High numeric ratings (8-10) = positive
+- Low ratings (1-5) = negative
+- Enthusiasm words = positive
+- Complaints/problems = negative
+- Reluctance ("I guess", "if I had to") = neutral/slightly negative
+
+Return ONLY the number.`
       },
       {
         role: 'user',
@@ -20,22 +32,21 @@ export async function analyzeSentiment(text: string): Promise<number> {
     ]
 
     const response = await aiProvider.generateCompletion(messages, {
-      temperature: 0.3,
+      temperature: 0.1,
       maxTokens: 10
     })
 
     const sentiment = parseFloat(response.trim())
 
-    // Validate and clamp the result
     if (isNaN(sentiment)) {
       console.warn(`Invalid sentiment response: ${response}`)
-      return 0 // Neutral fallback
+      return 0
     }
 
     return Math.max(-1, Math.min(1, sentiment))
   } catch (error) {
     console.error('Failed to analyze sentiment:', error)
-    return 0 // Neutral fallback on error
+    return 0
   }
 }
 
