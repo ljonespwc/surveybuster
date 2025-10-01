@@ -210,14 +210,19 @@ export async function POST(request: Request) {
               stream.tts(fullResponse)
 
               // OPTIMIZATION 1 & 4: Fire-and-forget database writes (parallel + batched)
-              storeFeedbackAndMessage(
-                conversationKey,
-                currentQuestion.id,
-                currentQuestion.text,
-                text,
-                sentiment,
-                nextQuestion.type
-              ).catch(err => console.error('DB error:', err))
+              // Store current response + next question message
+              Promise.all([
+                // Store the user's response to the current question
+                storeFeedbackResponse(
+                  conversationKey,
+                  currentQuestion.id,
+                  currentQuestion.text,
+                  text,
+                  sentiment
+                ),
+                // Store the next question we're about to ask
+                storeConversationMessage(conversationKey, nextQuestion.text, nextQuestion.type)
+              ]).catch(err => console.error('DB error:', err))
 
               // Send progress update
               const progress = getProgress(conversationKey)
