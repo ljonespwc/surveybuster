@@ -182,18 +182,16 @@ export async function POST(request: Request) {
 
             console.log(`💬 User response to "${currentQuestion.text}": "${text.substring(0, 50)}..."`)
 
-            // OPTIMIZATION 1 & 3: Stream sentiment + transition, but only await transition first
+            // OPTIMIZATION 1 & 3: Stream sentiment + transition in parallel
             const streamResult = await streamSentimentAndTransition(text)
-            const transitionPromise = streamResult.transition
-            const sentimentPromise = streamResult.sentiment
 
-            // Get transition immediately (needed for response)
-            const transition = await transitionPromise
+            // Get both values in parallel (don't wait for one before the other)
+            const [transition, sentiment] = await Promise.all([
+              streamResult.transition,
+              streamResult.sentiment
+            ])
+
             console.log(`🔄 Transition: "${transition}"`)
-
-            // Get next question while sentiment is still resolving
-            // Note: getNextQuestion needs sentiment, so we await it here
-            const sentiment = await sentimentPromise
             console.log(`📊 Sentiment: ${sentiment.toFixed(2)}`)
 
             // Store the response in conversation state (in-memory, instant)
