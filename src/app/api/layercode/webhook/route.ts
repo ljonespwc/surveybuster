@@ -18,6 +18,7 @@ import {
 import {
   ensureSession,
   storeFeedbackResponse,
+  updateSentimentScore,
   updateSessionMetrics,
   calculateAndStoreMetrics,
   storeConversationMessage,
@@ -190,7 +191,7 @@ export async function POST(request: Request) {
               // Just ask the next question directly
               stream.tts(nextQuestion.text)
 
-              // Fire-and-forget: Store response + analyze sentiment + store next question
+              // Fire-and-forget: Store response + store next question
               Promise.all([
                 // Store the user's response (without sentiment for now)
                 storeFeedbackResponse(
@@ -201,23 +202,17 @@ export async function POST(request: Request) {
                   undefined // sentiment will be added async
                 ),
                 // Store the next question we're about to ask
-                storeConversationMessage(conversationKey, nextQuestion.text, nextQuestion.type),
-                // Async sentiment analysis - updates DB when complete
-                analyzeSentiment(text).then(sentiment => {
-                  // Update the response record with sentiment score
-                  return storeFeedbackResponse(
-                    conversationKey,
-                    currentQuestion.id,
-                    currentQuestion.text,
-                    text,
-                    sentiment
-                  )
-                }).catch(err => console.error('❌ Sentiment analysis error:', err))
+                storeConversationMessage(conversationKey, nextQuestion.text, nextQuestion.type)
               ]).catch(err => {
                 console.error('❌ DB write error:', err)
                 console.error('Session:', conversationKey)
                 console.error('Question:', currentQuestion.id)
               })
+
+              // Async sentiment analysis - updates DB when complete (separate promise)
+              analyzeSentiment(text).then(sentiment => {
+                return updateSentimentScore(conversationKey, currentQuestion.id, sentiment)
+              }).catch(err => console.error('❌ Sentiment analysis error:', err))
 
               // Send progress update
               const progress = getProgress(conversationKey)
@@ -236,25 +231,19 @@ export async function POST(request: Request) {
 
               stream.tts(state.questionFlow.thankYouMessage)
 
-              // Store the final response and analyze sentiment (fire-and-forget)
-              Promise.all([
-                storeFeedbackResponse(
-                  conversationKey,
-                  currentQuestion.id,
-                  currentQuestion.text,
-                  text,
-                  undefined
-                ),
-                analyzeSentiment(text).then(sentiment => {
-                  return storeFeedbackResponse(
-                    conversationKey,
-                    currentQuestion.id,
-                    currentQuestion.text,
-                    text,
-                    sentiment
-                  )
-                })
-              ]).catch(err => console.error('❌ Final response DB error:', err))
+              // Store the final response (fire-and-forget)
+              storeFeedbackResponse(
+                conversationKey,
+                currentQuestion.id,
+                currentQuestion.text,
+                text,
+                undefined
+              ).catch(err => console.error('❌ Final response DB error:', err))
+
+              // Async sentiment for final response
+              analyzeSentiment(text).then(sentiment => {
+                return updateSentimentScore(conversationKey, currentQuestion.id, sentiment)
+              }).catch(err => console.error('❌ Final sentiment error:', err))
 
               // Update session metrics
               await updateSessionMetrics(conversationKey, state.responses.length)

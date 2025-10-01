@@ -49,6 +49,35 @@ export async function storeFeedbackResponse(
 }
 
 /**
+ * Update sentiment score for an existing feedback response
+ */
+export async function updateSentimentScore(
+  sessionId: string,
+  questionId: string,
+  sentimentScore: number
+): Promise<void> {
+  try {
+    const supabase = getSupabaseClient()
+
+    const { error } = await supabase
+      .from('feedback_responses')
+      .update({ sentiment_score: sentimentScore })
+      .eq('session_id', sessionId)
+      .eq('question_id', questionId)
+      .is('sentiment_score', null) // Only update if it's still null
+
+    if (error) {
+      console.error('Failed to update sentiment score:', error)
+      throw error
+    }
+
+    console.log(`✅ Updated sentiment ${sentimentScore.toFixed(2)} for session ${sessionId}, question ${questionId}`)
+  } catch (error) {
+    console.error('Error updating sentiment score:', error)
+  }
+}
+
+/**
  * Update conversation session with completion metrics
  */
 export async function updateSessionMetrics(
