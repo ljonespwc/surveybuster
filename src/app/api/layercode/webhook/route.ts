@@ -183,16 +183,24 @@ export async function POST(request: Request) {
             console.log(`💬 User response to "${currentQuestion.text}": "${text.substring(0, 50)}..."`)
 
             // OPTIMIZATION 1 & 3: Stream sentiment + transition in parallel
-            const streamResult = await streamSentimentAndTransition(text)
+            let transition, sentiment
+            try {
+              const streamResult = await streamSentimentAndTransition(text)
 
-            // Get both values in parallel (don't wait for one before the other)
-            const [transition, sentiment] = await Promise.all([
-              streamResult.transition,
-              streamResult.sentiment
-            ])
+              // Get both values in parallel (don't wait for one before the other)
+              ;[transition, sentiment] = await Promise.all([
+                streamResult.transition,
+                streamResult.sentiment
+              ])
 
-            console.log(`🔄 Transition: "${transition}"`)
-            console.log(`📊 Sentiment: ${sentiment.toFixed(2)}`)
+              console.log(`🔄 Transition: "${transition}"`)
+              console.log(`📊 Sentiment: ${sentiment.toFixed(2)}`)
+            } catch (streamError) {
+              console.error('❌ Streaming AI error:', streamError)
+              // Fallback values
+              transition = "Thanks for sharing"
+              sentiment = 0
+            }
 
             // Store the response in conversation state (in-memory, instant)
             storeResponse(conversationKey, currentQuestion.id, currentQuestion.text, text, sentiment)
@@ -220,7 +228,11 @@ export async function POST(request: Request) {
                 ),
                 // Store the next question we're about to ask
                 storeConversationMessage(conversationKey, nextQuestion.text, nextQuestion.type)
-              ]).catch(err => console.error('DB error:', err))
+              ]).catch(err => {
+                console.error('❌ DB write error:', err)
+                console.error('Session:', conversationKey)
+                console.error('Question:', currentQuestion.id)
+              })
 
               // Send progress update
               const progress = getProgress(conversationKey)
