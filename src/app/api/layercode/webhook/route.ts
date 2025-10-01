@@ -241,6 +241,15 @@ export async function POST(request: Request) {
 
               stream.tts(state.questionFlow.thankYouMessage)
 
+              // Store the final response (fire-and-forget)
+              storeFeedbackResponse(
+                conversationKey,
+                currentQuestion.id,
+                currentQuestion.text,
+                text,
+                sentiment
+              ).catch(err => console.error('❌ Final response DB error:', err))
+
               // Update session metrics
               await updateSessionMetrics(conversationKey, state.responses.length)
 
