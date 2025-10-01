@@ -164,7 +164,8 @@ export async function calculateAndStoreMetrics(
  */
 export async function ensureSession(
   sessionId: string,
-  pageUrl?: string
+  pageUrl?: string,
+  totalQuestions?: number
 ): Promise<void> {
   try {
     const supabase = getSupabaseClient()
@@ -184,7 +185,7 @@ export async function ensureSession(
           session_id: sessionId,
           page_url: pageUrl || '',
           started_at: new Date().toISOString(),
-          total_questions: 0,
+          total_questions: totalQuestions || 0,
           completed_questions: 0
         })
 
@@ -193,7 +194,13 @@ export async function ensureSession(
         throw error
       }
 
-      console.log(`✅ Created new session: ${sessionId}`)
+      console.log(`✅ Created new session: ${sessionId} with ${totalQuestions || 0} questions`)
+    } else if (totalQuestions !== undefined) {
+      // Update total_questions if provided
+      await supabase
+        .from('conversation_sessions')
+        .update({ total_questions: totalQuestions })
+        .eq('session_id', sessionId)
     }
   } catch (error) {
     console.error('Error ensuring session exists:', error)

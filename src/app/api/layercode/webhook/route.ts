@@ -67,11 +67,11 @@ export async function POST(request: Request) {
         if (type === 'session.start') {
           // Initialize feedback collection conversation
           try {
-            // Ensure session exists in database
-            await ensureSession(conversationKey, 'widget')
-
             // Initialize conversation state with question flow
             const state = await initializeConversation(conversationKey)
+
+            // Ensure session exists in database with total question count
+            await ensureSession(conversationKey, 'widget', state.questionFlow.questions.length)
 
             // Get the first question
             const firstQuestion = getCurrentQuestion(conversationKey)
@@ -137,6 +137,8 @@ export async function POST(request: Request) {
             if (!state) {
               console.log(`⚠️  No state found for ${conversationKey}, reinitializing...`)
               state = await initializeConversation(conversationKey)
+              // Update total_questions in database
+              await ensureSession(conversationKey, undefined, state.questionFlow.questions.length)
             }
 
             // Check if user wants to skip
