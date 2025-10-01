@@ -12,11 +12,9 @@ import {
 } from '@/lib/question-flow-manager'
 import {
   extractRating,
-  detectSkipIntent
+  detectSkipIntent,
+  analyzeSentiment
 } from '@/lib/feedback-analyzer'
-import {
-  streamSentimentAndTransition
-} from '@/lib/feedback-analyzer-streaming'
 import {
   ensureSession,
   storeFeedbackResponse,
@@ -182,44 +180,39 @@ export async function POST(request: Request) {
 
             console.log(`💬 User response to "${currentQuestion.text}": "${text.substring(0, 50)}..."`)
 
-            // Stream sentiment analysis and transition generation
-            const streamResult = await streamSentimentAndTransition(text)
+            // Store the response in conversation state (in-memory, instant) - no sentiment yet
+            storeResponse(conversationKey, currentQuestion.id, currentQuestion.text, text)
 
-            // Get both values in parallel
-            const [transition, sentiment] = await Promise.all([
-              streamResult.transition,
-              streamResult.sentiment
-            ])
-
-            console.log(`🔄 Transition: "${transition}"`)
-            console.log(`📊 Sentiment: ${sentiment.toFixed(2)}`)
-
-            // Store the response in conversation state (in-memory, instant)
-            storeResponse(conversationKey, currentQuestion.id, currentQuestion.text, text, sentiment)
-
-            // Get next question
-            const nextQuestion = getNextQuestion(conversationKey, text, sentiment)
+            // Get next question (no sentiment needed for follow-up logic anymore)
+            const nextQuestion = getNextQuestion(conversationKey, text)
 
             if (nextQuestion) {
-              // Combine transition with next question
-              const fullResponse = `${transition} ${nextQuestion.text}`
+              // Just ask the next question directly
+              stream.tts(nextQuestion.text)
 
-              // OPTIMIZATION 2: Send TTS immediately (don't wait for DB)
-              stream.tts(fullResponse)
-
-              // OPTIMIZATION 1 & 4: Fire-and-forget database writes (parallel + batched)
-              // Store current response + next question message
+              // Fire-and-forget: Store response + analyze sentiment + store next question
               Promise.all([
-                // Store the user's response to the current question
+                // Store the user's response (without sentiment for now)
                 storeFeedbackResponse(
                   conversationKey,
                   currentQuestion.id,
                   currentQuestion.text,
                   text,
-                  sentiment
+                  undefined // sentiment will be added async
                 ),
                 // Store the next question we're about to ask
-                storeConversationMessage(conversationKey, nextQuestion.text, nextQuestion.type)
+                storeConversationMessage(conversationKey, nextQuestion.text, nextQuestion.type),
+                // Async sentiment analysis - updates DB when complete
+                analyzeSentiment(text).then(sentiment => {
+                  // Update the response record with sentiment score
+                  return storeFeedbackResponse(
+                    conversationKey,
+                    currentQuestion.id,
+                    currentQuestion.text,
+                    text,
+                    sentiment
+                  )
+                }).catch(err => console.error('❌ Sentiment analysis error:', err))
               ]).catch(err => {
                 console.error('❌ DB write error:', err)
                 console.error('Session:', conversationKey)
@@ -243,14 +236,25 @@ export async function POST(request: Request) {
 
               stream.tts(state.questionFlow.thankYouMessage)
 
-              // Store the final response (fire-and-forget)
-              storeFeedbackResponse(
-                conversationKey,
-                currentQuestion.id,
-                currentQuestion.text,
-                text,
-                sentiment
-              ).catch(err => console.error('❌ Final response DB error:', err))
+              // Store the final response and analyze sentiment (fire-and-forget)
+              Promise.all([
+                storeFeedbackResponse(
+                  conversationKey,
+                  currentQuestion.id,
+                  currentQuestion.text,
+                  text,
+                  undefined
+                ),
+                analyzeSentiment(text).then(sentiment => {
+                  return storeFeedbackResponse(
+                    conversationKey,
+                    currentQuestion.id,
+                    currentQuestion.text,
+                    text,
+                    sentiment
+                  )
+                })
+              ]).catch(err => console.error('❌ Final response DB error:', err))
 
               // Update session metrics
               await updateSessionMetrics(conversationKey, state.responses.length)
@@ -261,8 +265,7 @@ export async function POST(request: Request) {
               // Send completion signal
               stream.data({
                 type: 'complete',
-                totalQuestions: state.responses.length,
-                averageSentiment: sentiment
+                totalQuestions: state.responses.length
               })
 
               console.log(`✅ Feedback session ${conversationKey} completed with ${state.responses.length} responses`)
